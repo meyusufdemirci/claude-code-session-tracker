@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  # What lets npm attest where this tarball was built. Without it `--provenance` fails.
+  # Backs both the trusted-publisher OIDC auth exchange and the `--provenance` attestation.
   id-token: write
 
 jobs:
@@ -24,6 +24,9 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      # Trusted publishing needs the OIDC exchange added in npm 11.5.1; Node 22's bundled npm can lag behind it.
+      - run: npm install -g npm@latest
+
       - name: Tag must match the version being published
         run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -39,5 +42,3 @@ jobs:
         run: node scripts/smoke.mjs "$(npm pack --silent)" npm
 
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
