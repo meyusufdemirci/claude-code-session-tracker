@@ -85,6 +85,26 @@ export interface SessionPromptUsage {
   tokens: SessionTokenTotals;
 }
 
+/**
+ * A snapshot of how full the context window is right now, unlike `tokens` on
+ * `SessionDetail`, which sums every turn ever billed.
+ *
+ * Transcripts carry no per-category breakdown (no line tells us "this many tokens
+ * were the system prompt"), so this only splits what the usage numbers actually
+ * support: the first turn's cache write as a proxy for the static system prompt,
+ * tools, skills, and agent definitions, versus what the window has grown by since.
+ */
+export interface SessionContextDetail {
+  /** The first turn's cache-write — static system/tools/skills/agents, plus the opening prompt. */
+  staticTokens: number;
+  /** Grown since that first turn: later prompts, replies, and tool results still in view. */
+  conversationTokens: number;
+  /** The active model's context window, when the model is recognized. */
+  windowTokens?: number;
+  /** `windowTokens` minus the current total, when `windowTokens` is known. */
+  freeTokens?: number;
+}
+
 export interface SessionDetail extends Session {
   counts: SessionCounts;
   tokens: SessionTokenTotals;
@@ -97,4 +117,6 @@ export interface SessionDetail extends Session {
   /** One entry per user prompt, sorted by token usage, highest first. */
   promptUsage: SessionPromptUsage[];
   notes: SessionDetailNotes;
+  /** Absent only when the transcript has no assistant turns to measure. */
+  context?: SessionContextDetail;
 }

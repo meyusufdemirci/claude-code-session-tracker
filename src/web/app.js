@@ -539,6 +539,7 @@ function fillPanel(detail) {
   setText('d-cache-read', formatCount(detail.tokens.cacheRead));
   setText('d-cache-create', formatCount(detail.tokens.cacheCreate));
 
+  fillContext(detail.context, detail.model);
   fillPromptUsage(detail.promptUsage);
 
   setText('d-models', detail.models.map(shortModel).join(', ') || shortModel(detail.model) || '—');
@@ -550,6 +551,40 @@ function fillPanel(detail) {
   fillPrompt('d-prompt-first-wrap', 'd-prompt-first', detail.firstPrompt);
   fillPrompt('d-prompt-last-wrap', 'd-prompt-last', detail.lastPrompt);
   byId('d-prompts-section').hidden = !detail.firstPrompt && !detail.lastPrompt;
+}
+
+/**
+ * A snapshot of how full the window is right now — unlike the Tokens section above
+ * it, which sums every turn the session ever billed for.
+ */
+function fillContext(context, model) {
+  const section = byId('d-context-section');
+  if (!section) return;
+
+  section.hidden = !context;
+  if (!context) return;
+
+  const { staticTokens, conversationTokens, windowTokens, freeTokens } = context;
+  setText('d-context-static', formatCount(staticTokens));
+  setText('d-context-convo', formatCount(conversationTokens));
+
+  const known = windowTokens !== undefined;
+  byId('d-context-bar').hidden = !known;
+  byId('d-context-free-row').hidden = !known;
+
+  if (!known) {
+    setText('d-context-note', `Context window size unknown for ${shortModel(model) ?? 'this model'}.`);
+    return;
+  }
+
+  const current = staticTokens + conversationTokens;
+  const widthPct = (value) => `${Math.min(100, (value / windowTokens) * 100)}%`;
+  byId('d-context-bar-static').style.width = widthPct(staticTokens);
+  byId('d-context-bar-convo').style.width = widthPct(conversationTokens);
+
+  setText('d-context-free', formatCount(freeTokens));
+  const usedPct = Math.round((current / windowTokens) * 100);
+  setText('d-context-note', `${usedPct}% of ${formatCompactCount(windowTokens)} tokens · ${shortModel(model) ?? 'model'}`);
 }
 
 /** Already sorted high to low by the server; the panel just lays it out. */

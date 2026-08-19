@@ -193,6 +193,24 @@
             </dl>
           </section>
 
+          <section class="drawer-section" id="d-context-section">
+            <h3>Context window</h3>
+            <div class="context-bar" id="d-context-bar">
+              <span class="context-bar-static" id="d-context-bar-static"></span>
+              <span class="context-bar-convo" id="d-context-bar-convo"></span>
+            </div>
+            <dl class="stats">
+              <div title="Approximate: the first turn's newly-cached tokens — system prompt, tools, skills, and agent definitions, plus the opening prompt.">
+                <dt>Static (system + tools)</dt><dd id="d-context-static">—</dd>
+              </div>
+              <div title="Grown since the first turn: later prompts, replies, and tool results the model still holds in view.">
+                <dt>Conversation</dt><dd id="d-context-convo">—</dd>
+              </div>
+              <div id="d-context-free-row"><dt>Free</dt><dd id="d-context-free">—</dd></div>
+            </dl>
+            <p class="context-note" id="d-context-note"></p>
+          </section>
+
           <section class="drawer-section" id="d-prompt-usage-section">
             <h3>Tokens by prompt</h3>
             <ol class="prompt-usage" id="d-prompt-usage"></ol>

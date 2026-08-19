@@ -4,6 +4,7 @@ import type { TrackerConfig } from '../../config.ts';
 import type { FileCache } from '../../core/cache.ts';
 import type {
   Session,
+  SessionContextDetail,
   SessionCounts,
   SessionDetail,
   SessionDetailNotes,
@@ -30,6 +31,43 @@ const SUBAGENT_FILE = /^agent-.+\.jsonl$/;
 
 /** Claude Code's stand-in on messages it produced itself. Not a model anyone chose. */
 const SYNTHETIC_MODEL = '<synthetic>';
+
+/**
+ * Context window by model alias, for the models this tracker has actually seen.
+ *
+ * Anthropic's Models API is the live source of truth, but a transcript reader has
+ * no request to make — it only ever sees the alias a past turn recorded. Missing an
+ * entry here means the free-space math is skipped for that turn, not guessed at.
+ */
+const CONTEXT_WINDOWS: Record<string, number> = {
+  'claude-fable-5': 1_000_000,
+  'claude-mythos-5': 1_000_000,
+  'claude-mythos-preview': 1_000_000,
+  'claude-opus-5': 1_000_000,
+  'claude-opus-4-8': 1_000_000,
+  'claude-opus-4-7': 1_000_000,
+  'claude-opus-4-6': 1_000_000,
+  'claude-sonnet-5': 1_000_000,
+  'claude-sonnet-4-6': 1_000_000,
+  'claude-haiku-4-5': 200_000,
+  'claude-opus-4-5': 200_000,
+  'claude-opus-4-1': 200_000,
+  'claude-opus-4-0': 200_000,
+  'claude-sonnet-4-5': 200_000,
+  'claude-sonnet-4-0': 200_000,
+  'claude-3-haiku': 200_000,
+  'claude-3-7-sonnet': 200_000,
+  'claude-3-5-haiku': 200_000,
+  'claude-3-opus': 200_000,
+  'claude-3-5-sonnet': 200_000,
+  'claude-3-sonnet': 200_000,
+};
+
+/** Strips a trailing `-YYYYMMDD` snapshot date, so a dated id matches its alias. */
+function contextWindowFor(model: string | undefined): number | undefined {
+  if (!model) return undefined;
+  return CONTEXT_WINDOWS[model] ?? CONTEXT_WINDOWS[model.replace(/-\d{8}$/, '')];
+}
 
 /**
  * Everything about one session, from a full read of its transcript.
@@ -68,6 +106,7 @@ interface Stats {
   activeMs?: number;
   promptUsage: SessionPromptUsage[];
   notes: SessionDetailNotes;
+  context?: SessionContextDetail;
 }
 
 async function scan(candidate: Candidate): Promise<Stats> {
@@ -92,6 +131,15 @@ async function scan(candidate: Candidate): Promise<Stats> {
    * collapse them — no set of every id in the file, no memory that grows with length.
    */
   let previousTurn: string | undefined;
+
+  // The context section reads only these two snapshots, not the running `tokens`
+  // total: the first turn's usage stands in for the static system/tools/skills/agents
+  // block, and the last turn's usage is what the window holds right now. `lastModel`
+  // tracks the most recently seen one regardless of `models`' first-seen order, since
+  // it decides which context window the last turn was actually working inside.
+  let firstTurnUsage: SessionTokenTotals | undefined;
+  let lastTurnUsage: SessionTokenTotals | undefined;
+  let lastModel: string | undefined;
 
   // Every real user record opens a new bucket; the assistant turns that follow it,
   // up to the next one, are what it cost. Pushed to `promptUsage` as each closes.
@@ -135,10 +183,18 @@ async function scan(candidate: Candidate): Promise<Stats> {
           counts.assistant += 1;
           addUsage(tokens, obj(message.usage));
           if (currentPrompt) addUsage(currentPrompt.tokens, obj(message.usage));
+
+          const turnUsage: SessionTokenTotals = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 };
+          addUsage(turnUsage, obj(message.usage));
+          firstTurnUsage ??= turnUsage;
+          lastTurnUsage = turnUsage;
         }
 
         const model = str(message.model);
-        if (model && model !== SYNTHETIC_MODEL) models.add(model);
+        if (model && model !== SYNTHETIC_MODEL) {
+          models.add(model);
+          lastModel = model;
+        }
         counts.tool += countBlocks(message.content, 'tool_use');
         break;
       }
@@ -187,11 +243,31 @@ async function scan(candidate: Candidate): Promise<Stats> {
     ...(sawTurnDuration ? { activeMs } : {}),
     promptUsage,
     notes,
+    ...(lastTurnUsage ? { context: buildContext(firstTurnUsage, lastTurnUsage, lastModel) } : {}),
   };
 }
 
 function totalTokens(tokens: SessionTokenTotals): number {
   return tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreate;
+}
+
+function buildContext(
+  first: SessionTokenTotals | undefined,
+  last: SessionTokenTotals,
+  model: string | undefined,
+): SessionContextDetail {
+  const current = last.input + last.cacheRead + last.cacheCreate;
+  // Capped at `current`: a `/clear` or compaction partway through the transcript can
+  // leave the first turn's cache write larger than what the window holds now.
+  const staticTokens = Math.min(first?.cacheCreate ?? 0, current);
+  const conversationTokens = current - staticTokens;
+  const windowTokens = contextWindowFor(model);
+
+  return {
+    staticTokens,
+    conversationTokens,
+    ...(windowTokens !== undefined ? { windowTokens, freeTokens: Math.max(0, windowTokens - current) } : {}),
+  };
 }
 
 /**

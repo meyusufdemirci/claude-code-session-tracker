@@ -373,6 +373,21 @@ body.drawer-open { overflow: hidden; }
 .stats > div { display: flex; flex-direction: column; gap: .1rem; }
 .stats dd { font-size: 1.05rem; font-variant-numeric: tabular-nums; font-weight: 600; }
 
+/* Static and conversation stacked left to right; whatever's left of `windowTokens`
+   is just the bar's own background showing through — no third segment to keep in sync. */
+.context-bar {
+  display: flex;
+  height: .5rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--rule);
+  margin-bottom: .8rem;
+}
+.context-bar-static { display: block; height: 100%; background: var(--ink-faint); }
+.context-bar-convo { display: block; height: 100%; background: var(--accent); }
+
+.context-note { margin: .6rem 0 0; font-size: .78rem; color: var(--ink-faint); }
+
 /* One row per prompt, highest token usage first — the order the server sent them in. */
 .prompt-usage { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .5rem; }
 
