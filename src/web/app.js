@@ -59,9 +59,13 @@ async function postJson(path) {
 
 /* ---------------------------------------------------------------- polling */
 
+const LIVE_BADGE_LABELS = { pending: 'Connecting', ok: 'Live', bad: 'Offline' };
+
 function setHealthState(tone, message) {
   document.querySelector('#health .dot')?.setAttribute('data-state', tone);
   setText('health-text', message);
+  byId('live-badge')?.setAttribute('data-state', tone);
+  setText('live-badge-text', LIVE_BADGE_LABELS[tone] ?? tone);
 }
 
 async function pollHealth() {

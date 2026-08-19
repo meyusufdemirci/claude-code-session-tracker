@@ -90,6 +90,31 @@ h1 { margin: .15rem 0 0; font-size: 1.6rem; letter-spacing: -.01em; font-weight:
 .dot[data-state="ok"] { background: var(--ok); }
 .dot[data-state="bad"] { background: var(--bad); }
 
+/* Sits ahead of .health in the masthead — a persistent "this page is watching
+   live" cue, distinct from the connection detail text next to it. */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .42rem;
+  padding: .18rem .6rem .18rem .5rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  font-size: .68rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+
+.live-badge[data-state="ok"] { border-color: var(--ok); color: var(--ok); }
+.live-badge[data-state="ok"] .live-dot { animation: pulse 1.4s ease-in-out infinite; }
+.live-badge[data-state="bad"] { border-color: var(--bad); color: var(--bad); }
+
+@media (prefers-reduced-motion: reduce) {
+  .live-badge[data-state="ok"] .live-dot { animation: none; }
+}
+
 main { display: flex; flex-direction: column; gap: 1.25rem; flex: 1; }
 
 .toolbar { display: flex; flex-wrap: wrap; align-items: baseline; gap: .6rem 1rem; }
