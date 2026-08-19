@@ -12,7 +12,7 @@ const TICK_MS = 1000;
  */
 const DETAIL_INTERVAL_MS = 10000;
 
-const DEFAULT_LIMIT = 50;
+const DEFAULT_LIMIT = 10;
 /** Matches the server's ceiling; asking for more just gets clamped. */
 const MAX_LIMIT = 2000;
 
@@ -220,7 +220,6 @@ function fillShared(set, session) {
   set('.project-name', session.project.name);
   set('.project-path', session.project.path, session.project.path);
   set('.session-title', headline(session), headline(session));
-  set('.branch', session.project.gitBranch);
 }
 
 const liveTable = createTable({
@@ -234,19 +233,18 @@ const liveTable = createTable({
     ${PROJECT_CELL}
     ${SESSION_CELL}
     <td><span class="badge"><span class="badge-dot"></span><span class="badge-text"></span></span><span class="waiting-for"></span></td>
-    <td class="mono branch"></td>
-    <td class="num uptime"></td>
-    <td class="mono version"></td>
-    <td class="num mono pid"></td>`,
+    <td class="mono model"></td>
+    <td class="num tokens"></td>
+    <td class="num uptime"></td>`,
   fill: (set, session, row) => {
     fillShared(set, session);
     set('.session-sub', session.name ?? session.id.slice(0, 8));
     set('.badge-text', STATUS_LABELS[session.status] ?? session.status);
     row.querySelector('.badge')?.setAttribute('data-status', session.status);
     set('.waiting-for', session.waitingFor ?? '');
+    set('.model', shortModel(session.model));
+    set('.tokens', formatTokens(session.tokens), tokensTitle(session.tokens));
     set('.uptime', formatUptime(session.startedAt));
-    set('.version', session.version);
-    set('.pid', session.live?.pid ? String(session.live.pid) : undefined);
   },
 });
 
@@ -259,17 +257,16 @@ const recentTable = createTable({
   columns: `
     ${PROJECT_CELL}
     ${SESSION_CELL}
-    <td class="mono branch"></td>
     <td class="mono model"></td>
     <td class="num when"></td>
-    <td class="num size"></td>`,
+    <td class="num tokens"></td>`,
   fill: (set, session) => {
     fillShared(set, session);
     const sub = session.lastPrompt ?? session.firstPrompt ?? '';
     set('.session-sub', sub, sub);
     set('.model', shortModel(session.model));
     set('.when', formatWhen(session.lastActiveAt), new Date(session.lastActiveAt).toLocaleString());
-    set('.size', formatBytes(session.sizeBytes));
+    set('.tokens', formatTokens(session.tokens), tokensTitle(session.tokens));
   },
 });
 
@@ -388,6 +385,31 @@ function formatWhen(at) {
 /** Thousands separators, in the reader's own locale. */
 function formatCount(value) {
   return typeof value === 'number' ? value.toLocaleString() : '—';
+}
+
+/** `12.3K`, `4.1M` — a table cell has no room for a comma-grouped count. */
+function formatCompactCount(value) {
+  return compactCountFormat.format(value);
+}
+const compactCountFormat = new Intl.NumberFormat(undefined, {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+/** One cell for all three totals, since a row has room for a phrase but not three columns. */
+function formatTokens(tokens) {
+  if (!tokens) return '—';
+  const total = tokens.input + tokens.output;
+  if (!total) return '—';
+  return `${formatCompactCount(tokens.input)} / ${formatCompactCount(tokens.output)} / ${formatCompactCount(total)}`;
+}
+
+/** The exact counts the compact cell rounds away, for a reader who hovers. */
+function tokensTitle(tokens) {
+  if (!tokens) return undefined;
+  const total = tokens.input + tokens.output;
+  if (!total) return undefined;
+  return `Input ${formatCount(tokens.input)} · Output ${formatCount(tokens.output)} · Total ${formatCount(total)}`;
 }
 
 /** A duration in prose: `2h 14m`, `9m 12s`, `41s`. Unlike uptime this never ticks. */

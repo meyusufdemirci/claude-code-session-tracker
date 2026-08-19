@@ -240,7 +240,7 @@ footer { font-size: .75rem; color: var(--ink-faint); border-top: 1px solid var(-
 .session-sub:empty { display: none; }
 
 .branch, .version, .pid, .model { color: var(--ink-soft); }
-.when, .size { color: var(--ink-soft); }
+.when, .tokens { color: var(--ink-soft); }
 .uptime { font-variant-numeric: tabular-nums; }
 
 .badge {

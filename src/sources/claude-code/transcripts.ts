@@ -3,9 +3,10 @@ import { open, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { TrackerConfig } from '../../config.ts';
 import type { FileCache } from '../../core/cache.ts';
-import type { Session } from '../../core/types.ts';
+import type { Session, SessionTokenTotals } from '../../core/types.ts';
 import type { RecentSessions } from '../source.ts';
 import { pathToSlug, projectNameFromPath, resolveSlugPath } from './slug.ts';
+import { scanTokens } from './usage.ts';
 
 /**
  * Enough of the opening to reach the first real prompt and the first timestamp.
@@ -42,11 +43,13 @@ const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
 /**
  * Finished sessions, newest first, read from `~/.claude/projects`.
  *
- * The listing is deliberately lopsided: finding the candidates costs one `readdir`
- * per project plus a `stat` per file and reads no contents at all, so the sort by
- * recency is cheap even across a thousand transcripts. Only the top `limit` are
- * opened, and only their first 16 KB and last 64 KB — never the middle, which is
- * where all the weight is.
+ * Finding the candidates costs one `readdir` per project plus a `stat` per file and
+ * reads no contents at all, so the sort by recency is cheap even across a thousand
+ * transcripts. Only the top `limit` are opened: their first 16 KB and last 64 KB for
+ * the facts a row needs, plus a full streaming pass to total the tokens a row shows.
+ * The full pass is the one place the cost scales with a transcript's size rather
+ * than its position in the list, but `FileCache` means it only runs once per file
+ * version — a live session pays it every poll, a finished one never again.
  */
 export async function listRecentSessions(
   config: TrackerConfig,
@@ -171,6 +174,9 @@ export async function findCandidate(
 async function readSession(candidate: Candidate): Promise<Session | undefined> {
   let head: Chunk;
   let tail: Chunk | undefined;
+  // Run alongside the head/tail read rather than after it: the two scan the same
+  // file independently, so there is no reason to pay for them one at a time.
+  const tokensPromise = readTokens(candidate.path);
   try {
     ({ head, tail } = await readEnds(candidate.path, candidate.size));
   } catch {
@@ -203,6 +209,7 @@ async function readSession(candidate: Candidate): Promise<Session | undefined> {
     lastActiveAt: facts.lastActiveAt ?? modifiedAt,
     transcriptPath: candidate.path,
     sizeBytes: candidate.size,
+    tokens: await tokensPromise,
   };
 
   if (facts.title) session.title = facts.title;
@@ -212,6 +219,19 @@ async function readSession(candidate: Candidate): Promise<Session | undefined> {
   if (facts.model) session.model = facts.model;
 
   return session;
+}
+
+/**
+ * Token totals never fail a listing. A transcript deleted between the `stat` and
+ * this read (or one that trips the stream reader some other way) just shows zero
+ * tokens rather than dropping the row `readEnds` still managed to build.
+ */
+async function readTokens(path: string): Promise<SessionTokenTotals> {
+  try {
+    return await scanTokens(path);
+  } catch {
+    return { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 };
+  }
 }
 
 /** A slice of a transcript, plus whether its edges cut a line in half. */

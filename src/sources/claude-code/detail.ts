@@ -11,6 +11,7 @@ import type {
 } from '../../core/types.ts';
 import { readLines } from './lines.ts';
 import { findCandidate, loadSession, type Candidate } from './transcripts.ts';
+import { addUsage } from './usage.ts';
 
 /**
  * The largest single record we will hold in memory.
@@ -211,14 +212,6 @@ function countBlocks(content: unknown, type: string): number {
     if (typeof block === 'object' && block !== null && str((block as Block).type) === type) found += 1;
   }
   return found;
-}
-
-function addUsage(totals: SessionTokenTotals, usage: Record<string, unknown> | undefined): void {
-  if (!usage) return;
-  totals.input += num(usage['input_tokens']) ?? 0;
-  totals.output += num(usage['output_tokens']) ?? 0;
-  totals.cacheRead += num(usage['cache_read_input_tokens']) ?? 0;
-  totals.cacheCreate += num(usage['cache_creation_input_tokens']) ?? 0;
 }
 
 interface Block {

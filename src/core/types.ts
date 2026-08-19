@@ -46,6 +46,7 @@ export interface Session {
   model?: string;
   transcriptPath?: string;
   sizeBytes?: number;
+  tokens?: SessionTokenTotals;
 }
 
 export interface SessionTokenTotals {
