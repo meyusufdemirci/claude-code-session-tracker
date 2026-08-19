@@ -20,6 +20,9 @@ const STATUS_LABELS = { busy: 'busy', waiting: 'waiting', idle: 'idle', ended: '
 /** Busy first, then anything needing a human, then the quiet ones. */
 const STATUS_RANK = { busy: 0, waiting: 1, idle: 2, ended: 3 };
 
+/** Which keys move between rows, and by how far. */
+const ROW_STEPS = { ArrowDown: 1, ArrowUp: -1, Home: 'first', End: 'last' };
+
 const byId = (id) => document.getElementById(id);
 const setText = (id, value) => {
   const node = byId(id);
@@ -33,6 +36,8 @@ const state = {
   total: 0,
   query: '',
   limit: readLimit(),
+  /** Consecutive failed polls. One is a blip; two is worth interrupting for. */
+  failures: 0,
   /** Id of the session the panel is showing, or null when it is closed. */
   openId: null,
   /** The last detail we fetched, kept so a re-read can redraw without a flash of empty. */
@@ -69,8 +74,25 @@ async function pollHealth() {
       'fact-sources',
       health.sources.map((s) => `${s.label} ${s.available ? '✓' : '✗'}`).join(' · ') || 'none',
     );
+    setText('no-data-dir', health.claudeDir);
+    renderAvailability(health.sources);
   } catch {
     // The session poll owns the connection indicator; a stale fact panel is harmless.
+  }
+}
+
+/**
+ * No source can find its data — which is not a failure, just an empty machine.
+ * The tables would say "no transcripts found" and leave the reader guessing, so
+ * they step aside for something that names the directory we looked in.
+ */
+function renderAvailability(sources) {
+  const missing = sources.length > 0 && !sources.some((source) => source.available);
+  const notice = byId('no-data');
+  if (notice) notice.hidden = !missing;
+  for (const id of ['live-panel', 'recent-panel']) {
+    const panel = byId(id);
+    if (panel) panel.hidden = missing;
   }
 }
 
@@ -79,9 +101,16 @@ async function pollSessions() {
   try {
     result = await getJson(`/api/sessions?limit=${state.limit}`);
   } catch (error) {
+    state.failures += 1;
     setHealthState('bad', `disconnected · ${error.message}`);
+    // One miss is a blip — a poll that landed mid-restart, a sleeping laptop. Two
+    // in a row means the server is gone, and every number on the page is stale.
+    if (state.failures > 1) showBanner(error);
     return;
   }
+
+  state.failures = 0;
+  hideBanner();
 
   const sessions = result.sessions ?? [];
   // The server never truncates running sessions, so this split is also the split
@@ -94,6 +123,20 @@ async function pollSessions() {
   render();
   // A session that ended while the panel was open should stop claiming it is busy.
   if (state.openId) syncPanelStatus();
+}
+
+function showBanner(error) {
+  const banner = byId('banner');
+  if (!banner || !banner.hidden) return;
+  banner.hidden = false;
+  setText('banner-text', 'Lost contact with the tracker — everything below is frozen.');
+  setText('banner-hint', `Still retrying every ${SESSIONS_INTERVAL_MS / 1000}s · ${error.message}`);
+}
+
+function hideBanner() {
+  const banner = byId('banner');
+  // Guarded so a healthy poll every two seconds is not also a DOM write every two.
+  if (banner && !banner.hidden) banner.hidden = true;
 }
 
 /* ------------------------------------------------------------------ views */
@@ -315,14 +358,19 @@ function formatUptime(startedAt) {
   return `${s}s`;
 }
 
-/** Relative while it is still news, then a plain date. */
-function formatWhen(at) {
-  if (!at) return '—';
+/** How long ago, in one short phrase. Coarse on purpose: `3d ago`, not `3d 04h`. */
+function formatAgo(at) {
   const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000));
   if (seconds < 60) return 'just now';
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 7 * 86400) return `${Math.floor(seconds / 86400)}d ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+/** Relative while it is still news, then a plain date — a week of `d ago` is enough. */
+function formatWhen(at) {
+  if (!at) return '—';
+  if (Date.now() - at < 7 * 86400_000) return formatAgo(at);
 
   const date = new Date(at);
   const sameYear = date.getFullYear() === new Date().getFullYear();
@@ -353,9 +401,12 @@ function formatSpan(ms) {
   return `${s}s`;
 }
 
-/** An absolute moment, because the panel is where you check exactly when. */
+/**
+ * An absolute moment, because the panel is where you check exactly when — with the
+ * relative half after it, because that is the part you read without doing sums.
+ */
 function formatStamp(at) {
-  return at ? new Date(at).toLocaleString() : '—';
+  return at ? `${new Date(at).toLocaleString()} · ${formatAgo(at)}` : '—';
 }
 
 function formatBytes(bytes) {
@@ -556,6 +607,72 @@ function flash(node, message, restoreTo = '') {
   flashes.set(node, setTimeout(() => { node.textContent = restoreTo; }, 1800));
 }
 
+/* ------------------------------------------------------------------- theme */
+
+const THEME_KEY = 'cst-theme';
+const THEME_CHOICES = new Set(['system', 'light', 'dark']);
+/** The same query the inline script in the page head consults before first paint. */
+const darkMedia = matchMedia('(prefers-color-scheme: dark)');
+
+/**
+ * Storage is wrapped because a browser is allowed to refuse it — a private window,
+ * a blocked-cookies setting. Losing the preference is survivable; a page that fails
+ * to boot over it is not.
+ */
+function readTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    return THEME_CHOICES.has(stored) ? stored : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+function storeTheme(choice) {
+  try {
+    // Following the OS is the absence of a preference, so it is stored as one.
+    if (choice === 'system') localStorage.removeItem(THEME_KEY);
+    else localStorage.setItem(THEME_KEY, choice);
+  } catch {
+    // Then it lasts for this page view only.
+  }
+}
+
+function applyTheme(choice) {
+  const dark = choice === 'dark' || (choice === 'system' && darkMedia.matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  for (const button of document.querySelectorAll('[data-theme-choice]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === choice));
+  }
+}
+
+/* ---------------------------------------------------------------- keyboard */
+
+/** Both tables walk as one list, because that is how the page reads. */
+function rowsInOrder() {
+  return [...document.querySelectorAll('#live-body tr[data-id], #recent-body tr[data-id]')];
+}
+
+/** `step` is a signed offset, or `'first'` / `'last'`. */
+function moveRowFocus(from, step) {
+  const rows = rowsInOrder();
+  if (rows.length === 0) return;
+
+  const at = from ? rows.indexOf(from) : -1;
+  const next =
+    step === 'first' ? 0
+    : step === 'last' ? rows.length - 1
+    // Arriving from outside the table lands on the first row rather than the second.
+    : at === -1 ? 0
+    : Math.min(rows.length - 1, Math.max(0, at + step));
+
+  rows[next]?.focus();
+}
+
+function isTyping(target) {
+  return target instanceof HTMLElement && target.matches('input, textarea, select');
+}
+
 /* ------------------------------------------------------------------ wiring */
 
 function readLimit() {
@@ -572,9 +689,26 @@ function setLimit(limit) {
   pollSessions();
 }
 
-byId('search')?.addEventListener('input', (event) => {
+const search = byId('search');
+
+search?.addEventListener('input', (event) => {
   state.query = event.target.value.trim().toLowerCase();
   render();
+});
+
+search?.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && search.value) {
+    // Clearing beats closing: a type-ahead you cannot undo with Escape is a trap.
+    event.stopPropagation();
+    search.value = '';
+    state.query = '';
+    render();
+    return;
+  }
+  if (event.key === 'ArrowDown' || event.key === 'Enter') {
+    event.preventDefault();
+    moveRowFocus(null, 'first');
+  }
 });
 
 byId('more-button')?.addEventListener('click', () => setLimit(state.limit * 4));
@@ -589,12 +723,21 @@ for (const body of [byId('live-body'), byId('recent-body')]) {
   });
 
   body?.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
     const row = event.target.closest('tr[data-id]');
     if (!row) return;
-    // Space scrolls the page by default, which is not what a pressed row should do.
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      // Space scrolls the page by default, which is not what a pressed row should do.
+      event.preventDefault();
+      openPanel(row.dataset.id, row);
+      return;
+    }
+
+    const step = ROW_STEPS[event.key];
+    if (step === undefined) return;
+    // Arrows would scroll the table instead; the browser catches up as focus moves.
     event.preventDefault();
-    openPanel(row.dataset.id, row);
+    moveRowFocus(row, step);
   });
 }
 
@@ -602,7 +745,19 @@ byId('drawer-close')?.addEventListener('click', closePanel);
 byId('scrim')?.addEventListener('click', closePanel);
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && state.openId) closePanel();
+  if (event.key === 'Escape' && state.openId) {
+    closePanel();
+    return;
+  }
+
+  // The panel is modal, so a shortcut that jumps behind it would be a broken promise.
+  if (state.openId || isTyping(event.target)) return;
+
+  if (event.key === '/') {
+    event.preventDefault();
+    search?.focus();
+    search?.select();
+  }
 });
 
 /**
@@ -646,6 +801,20 @@ byId('d-reveal')?.addEventListener('click', async () => {
   }
 });
 
+for (const button of document.querySelectorAll('[data-theme-choice]')) {
+  button.addEventListener('click', () => {
+    const choice = button.dataset.themeChoice;
+    storeTheme(choice);
+    applyTheme(choice);
+  });
+}
+
+// Only meaningful while following the OS, but the listener costs nothing either way.
+darkMedia.addEventListener('change', () => {
+  if (readTheme() === 'system') applyTheme('system');
+});
+
+applyTheme(readTheme());
 pollHealth();
 pollSessions();
 setInterval(pollHealth, HEALTH_INTERVAL_MS);

@@ -7,6 +7,18 @@
     <title>Claude Code sessions</title>
     <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%230e2226"/><circle cx="16" cy="16" r="9" fill="none" stroke="%2300b3bf" stroke-width="2" opacity=".45"/><circle cx="16" cy="16" r="4" fill="%2300b3bf"/></svg>' />
     <link rel="stylesheet" href="/style.css" />
+
+    <!-- Resolve the theme before the first paint. Deferring this to app.js would
+         show a light page for a frame to everyone who chose dark. -->
+    <script>
+      (() => {
+        const stored = localStorage.getItem('cst-theme');
+        const choice = stored === 'light' || stored === 'dark' ? stored : 'system';
+        const dark = choice === 'dark'
+          || (choice === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      })();
+    </script>
   </head>
   <body>
     <header class="masthead">
@@ -14,11 +26,24 @@
         <p class="eyebrow">Claude Code</p>
         <h1>Sessions</h1>
       </div>
-      <div class="health" id="health" aria-live="polite">
-        <span class="dot" data-state="pending"></span>
-        <span id="health-text">Connecting…</span>
+      <div class="masthead-side">
+        <div class="health" id="health" aria-live="polite">
+          <span class="dot" data-state="pending"></span>
+          <span id="health-text">Connecting…</span>
+        </div>
+
+        <div class="segmented" id="theme" role="group" aria-label="Colour theme">
+          <button type="button" data-theme-choice="system" aria-pressed="false">Auto</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        </div>
       </div>
     </header>
+
+    <p class="banner" id="banner" role="alert" hidden>
+      <span id="banner-text"></span>
+      <span class="hint" id="banner-hint"></span>
+    </p>
 
     <div class="toolbar">
       <label class="search">
@@ -35,7 +60,25 @@
     </div>
 
     <main>
-      <section class="panel">
+      <!-- Shown instead of the tables when no source can find its data. Nothing is
+           wrong with the tool at that point, so it explains rather than errors. -->
+      <section class="panel notice" id="no-data" hidden>
+        <h2>Nothing to track</h2>
+        <h3>No Claude Code data found</h3>
+        <p>
+          The tracker looked in <code id="no-data-dir" class="mono">~/.claude</code> and found
+          neither a <code>sessions</code> nor a <code>projects</code> directory.
+        </p>
+        <ul>
+          <li>If Claude Code has never run on this machine, run <code>claude</code> once — a
+            session appears here within two seconds.</li>
+          <li>If its data lives elsewhere, set <code>CLAUDE_CONFIG_DIR</code> or restart with
+            <code>--claude-dir &lt;path&gt;</code>.</li>
+        </ul>
+        <p class="hint">This page keeps checking, so it will fill in on its own.</p>
+      </section>
+
+      <section class="panel" id="live-panel">
         <h2>Active <span class="count" id="live-count"></span></h2>
 
         <p class="empty" id="live-empty">Looking for running sessions…</p>
@@ -58,7 +101,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" id="recent-panel">
         <h2>Recent <span class="count" id="recent-count"></span></h2>
 
         <p class="empty" id="recent-empty">Reading transcripts…</p>
@@ -98,6 +141,12 @@
 
     <footer>
       <span>Read-only. Bound to loopback. Nothing leaves this machine.</span>
+      <span class="keys">
+        <span><kbd>/</kbd> filter</span>
+        <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+        <span><kbd>↵</kbd> open</span>
+        <span><kbd>Esc</kbd> close</span>
+      </span>
     </footer>
 
     <!-- The detail panel. Populated from /api/sessions/:id the first time a row is opened. -->

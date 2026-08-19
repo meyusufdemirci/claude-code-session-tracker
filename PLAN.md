@@ -296,13 +296,47 @@ Each phase ends with something runnable. No phase depends on a later one.
 - *Also:* `<synthetic>` is Claude Code's stand-in on messages it wrote itself rather
   than a model anyone chose, so it is kept out of the model list. Its usage is zero.
 
-### Phase 4 — Polish & publish  *(~half a day)*
+### Phase 4 — Polish & publish  *(~half a day)*  ✅ **DONE** (publish pending)
 - Dark/light, empty state (no `~/.claude`), error states, keyboard nav, relative timestamps.
 - README with all four runner commands.
 - `--json` prints the session list and exits — makes it scriptable.
 - `npm publish --access public` with provenance; the name **`claude-code-session-tracker`
-  is available on npm** (`claude-sessions`, `cc-sessions`, `claude-session-tracker` are all taken).
+  is still available on npm** (re-checked; `claude-sessions`, `cc-sessions`,
+  `claude-session-tracker` are all taken).
 - **Done when:** `npx claude-code-session-tracker@latest` works on a clean machine.
+- *Landed:* a three-state theme control, the no-data state, a disconnection banner,
+  full keyboard navigation, `scripts/smoke.mjs`, and two GitHub workflows — CI
+  (node 20/22/24 × npm/pnpm/yarn/bun on Linux, plus npm on macOS and Windows) and a
+  tag-driven release that publishes with provenance. The tarball is **84 KB**, holds
+  no dependencies and no install scripts, and every check runs against *it* rather
+  than against `src/`.
+- *Four things the work forced:*
+  - **A theme needs three states, and a media query only gives two.** `prefers-color-scheme`
+    can say what the OS wants but cannot be overridden, so "Auto" had to become a
+    stored preference like the other two. An inline script in the page head resolves
+    it to a literal `light`/`dark` before the first paint — which then lets the
+    stylesheet carry two flat palettes and no media query at all.
+  - **The empty state was unreachable.** The CLI exited `1` when no source could find
+    its data, so the page that explains it could never load. Starting anyway is the
+    better answer: the page polls, so a machine that has never run Claude Code fills
+    in by itself the moment the first session starts. The CLI warns and carries on.
+  - **A smoke test that runs `src/` proves nothing about a package.** What breaks on
+    publish is the shape of the tarball — a missing executable bit, an asset resolved
+    against `process.cwd()`, a stray `postinstall`. So the test installs the packed
+    tarball with the named package manager into a temp directory, runs the *linked
+    binary* against a fixture transcript, and asserts the things only a published
+    package can get wrong: no install scripts, no runtime dependencies, a shim that
+    is executable.
+  - **`npx /abs/path.tgz` runs the tarball instead of installing it.** npm treats an
+    absolute path as a command; `npx ./name.tgz` is the form that installs. Worth
+    knowing before writing it into a README.
+- *Also:* `node -e "fs.rmSync(...)"` in the `clean` script leaned on `fs` being a
+  global, which it is under Node 22 and is not a documented promise. Now explicit.
+- *Also:* rows use `:focus`, not `:focus-visible`. Whether a programmatic `.focus()`
+  from an arrow key counts as "visible" is a browser heuristic; clicking a row hands
+  focus straight to the panel, so a plain `:focus` rule only ever shows for the keyboard.
+- *Not done:* the package is **not published yet**. `npm publish` is the one step here
+  that cannot be taken back, so it waits for a decision, not a commit.
 
 ### Phase 5+ — only if wanted
 - SSE `/api/events` replacing the 2 s poll.

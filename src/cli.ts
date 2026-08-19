@@ -8,6 +8,9 @@ import { openBrowser } from './desktop.ts';
 import { createServer, listen } from './server.ts';
 import { VERSION } from './version.ts';
 
+/** Anything else means the dashboard is reachable from off this machine. */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
+
 const HELP = `
   claude-code-session-tracker ${VERSION}
 
@@ -26,7 +29,8 @@ const HELP = `
     -h, --help            Show this message
     -v, --version         Show the version
 
-  The server binds to loopback only and never writes to the Claude directory.
+  Never writes to the Claude directory. Binds to loopback unless --host says
+  otherwise, and refuses requests not addressed to a loopback host.
 `;
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
@@ -94,13 +98,25 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     return 0;
   }
 
+  // Both of these are said and then carried on from. Starting anyway is the point:
+  // the page polls, so a machine that has never run Claude Code fills in by itself
+  // the moment the first session starts.
   const statuses = await registry.statuses();
   if (!statuses.some((source) => source.available)) {
     process.stderr.write(
-      `No Claude Code data found at ${config.claudeDir}.\n` +
-        'Set CLAUDE_CONFIG_DIR or pass --claude-dir if it lives elsewhere.\n',
+      `\n  Warning  No Claude Code data at ${config.claudeDir}.\n` +
+        '           Set CLAUDE_CONFIG_DIR or pass --claude-dir if it lives elsewhere.\n',
     );
-    return 1;
+  }
+
+  // The loopback guard in the server is skipped once we are not on loopback, and
+  // transcripts hold prompts, paths, and sometimes secrets. Nobody should reach that
+  // point without being told.
+  if (!LOOPBACK_HOSTS.has(config.host)) {
+    process.stderr.write(
+      `\n  Warning  Binding ${config.host}, not loopback.\n` +
+        '           Anyone who can reach this port can read your transcripts.\n',
+    );
   }
 
   const server = createServer({ config, registry });

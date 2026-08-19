@@ -1,4 +1,9 @@
+/* Two palettes, one selector each.
+   The theme is resolved to a literal `light`/`dark` before first paint by the
+   inline script in the page head, so there is no `prefers-color-scheme` query
+   here — "system" is a stored preference, not a third set of colours. */
 :root {
+  color-scheme: light;
   --ground: #f2f6f6;
   --surface: #ffffff;
   --ink: #0e2226;
@@ -12,20 +17,19 @@
   --zebra: #f8fbfb;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ground: #0a1416;
-    --surface: #101e20;
-    --ink: #e2eceb;
-    --ink-soft: #9cb2b4;
-    --ink-faint: #6c8487;
-    --rule: #22383a;
-    --accent: #4ec3c9;
-    --ok: #4fb894;
-    --warn: #d7a24a;
-    --bad: #e8925a;
-    --zebra: #122325;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground: #0a1416;
+  --surface: #101e20;
+  --ink: #e2eceb;
+  --ink-soft: #9cb2b4;
+  --ink-faint: #6c8487;
+  --rule: #22383a;
+  --accent: #4ec3c9;
+  --ok: #4fb894;
+  --warn: #d7a24a;
+  --bad: #e8925a;
+  --zebra: #122325;
 }
 
 * { box-sizing: border-box; }
@@ -413,3 +417,85 @@ body.drawer-open { overflow: hidden; }
 @media (max-width: 34rem) {
   .drawer { width: 100vw; border-left: 0; }
 }
+
+/* --------------------------------------------------------------- controls */
+
+/* Health and theme sit together on the right of the masthead. */
+.masthead-side { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+
+/* Three states rather than a two-way switch: following the OS is a real choice,
+   and a toggle cannot express it. `aria-pressed` says which one is in force. */
+.segmented { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+
+.segmented button {
+  padding: .22rem .5rem;
+  border: 0;
+  border-right: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .64rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.segmented button:last-child { border-right: 0; }
+.segmented button:hover { color: var(--accent); }
+.segmented button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.segmented button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+
+/* ----------------------------------------------------------------- states */
+
+/* Losing the server is the one failure that invalidates the whole page, so it is
+   said at the top rather than in the corner. */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .5rem;
+  padding: .6rem .9rem;
+  border: 1px solid var(--bad);
+  border-left-width: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--bad) 8%, var(--surface));
+  color: var(--ink);
+  font-size: .85rem;
+}
+
+.banner .hint { color: var(--ink-soft); }
+
+/* The no-data panel is the page when there is nothing to list, so it gets room. */
+.notice { padding: 1.6rem 1.3rem 1.75rem; }
+.notice h2 { margin-bottom: .5rem; }
+.notice h3 { margin: .3rem 0 .4rem; font-size: 1.05rem; font-weight: 600; }
+.notice p { margin: 0 0 .7rem; color: var(--ink-soft); max-width: 46rem; }
+.notice p:last-child { margin-bottom: 0; }
+.notice code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em; }
+
+.notice ul { margin: 0 0 .7rem; padding-left: 1.1rem; color: var(--ink-soft); max-width: 46rem; }
+.notice li { margin-bottom: .25rem; }
+
+/* --------------------------------------------------------------- shortcuts */
+
+footer { display: flex; flex-wrap: wrap; gap: .4rem 1.25rem; justify-content: space-between; }
+.keys { display: flex; flex-wrap: wrap; gap: .1rem .9rem; }
+
+kbd {
+  display: inline-block;
+  min-width: 1.15rem;
+  padding: 0 .3rem;
+  border: 1px solid var(--rule);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .68rem;
+  text-align: center;
+}
+
+/* Arrow-key navigation moves focus without a click, and whether that counts as
+   "visible" is a browser heuristic. A plain `:focus` rule is not: clicking a row
+   hands focus straight to the panel, so this only ever shows for the keyboard. */
+.grid tbody tr[data-id]:focus { outline: 2px solid var(--accent); outline-offset: -2px; }

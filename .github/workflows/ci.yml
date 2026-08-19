@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Typecheck and pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm build
+      - run: npm pack
+      # Every job below installs this exact file, so what CI proves is what npm ships.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball
+          path: '*.tgz'
+          retention-days: 7
+
+  runners:
+    name: node ${{ matrix.node }} · ${{ matrix.manager }}
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+        manager: [npm, pnpm, yarn, bun]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball
+          path: packed
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # pnpm and yarn come from corepack, which ships with the Node versions above.
+      - if: matrix.manager == 'pnpm' || matrix.manager == 'yarn'
+        run: corepack enable
+      - if: matrix.manager == 'bun'
+        uses: oven-sh/setup-bun@v2
+      - name: Install the tarball and run it
+        run: node scripts/smoke.mjs packed/*.tgz ${{ matrix.manager }}
+
+  platforms:
+    name: ${{ matrix.os }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball
+          path: packed
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # `ps` does not exist on Windows and the file manager differs on every OS, so
+      # the parts that touch the machine itself are worth running on the machines.
+      - name: Install the tarball and run it
+        shell: bash
+        run: node scripts/smoke.mjs packed/*.tgz npm
