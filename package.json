@@ -1,0 +1,48 @@
+{
+  "name": "claude-code-session-tracker",
+  "version": "0.1.0",
+  "description": "See every Claude Code session on your machine in a local dashboard.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "sessions",
+    "dashboard",
+    "cli",
+    "monitor"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "claude-code-session-tracker": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc && node scripts/build.js",
+    "dev": "node --watch src/cli.ts",
+    "start": "node dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.9.0"
+  },
+  "packageManager": "pnpm@10.30.0"
+}

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Claude Code sessions</title>
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%230e2226"/><circle cx="16" cy="16" r="9" fill="none" stroke="%2300b3bf" stroke-width="2" opacity=".45"/><circle cx="16" cy="16" r="4" fill="%2300b3bf"/></svg>' />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Claude Code</p>
+        <h1>Sessions</h1>
+      </div>
+      <div class="health" id="health" aria-live="polite">
+        <span class="dot" data-state="pending"></span>
+        <span id="health-text">Connecting…</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel" id="sessions-panel">
+        <h2>Active</h2>
+        <p class="empty" id="sessions-empty">No sessions yet — listings arrive in Phase 1.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Environment</h2>
+        <dl class="facts" id="facts">
+          <div><dt>Tracker</dt><dd id="fact-version">—</dd></div>
+          <div><dt>Node</dt><dd id="fact-node">—</dd></div>
+          <div><dt>Data directory</dt><dd id="fact-dir" class="mono">—</dd></div>
+          <div><dt>Sources</dt><dd id="fact-sources">—</dd></div>
+        </dl>
+      </section>
+    </main>
+
+    <footer>
+      <span>Read-only. Bound to loopback. Nothing leaves this machine.</span>
+    </footer>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
