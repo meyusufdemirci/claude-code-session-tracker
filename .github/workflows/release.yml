@@ -1,6 +1,6 @@
 name: Release
 
-# Tag-driven: `git tag v0.1.0 && git push --tags` is the whole release ritual.
+# Tag-driven: `git tag v0.2.0 && git push --tags` is the whole release ritual.
 on:
   push:
     tags: ['v*']
