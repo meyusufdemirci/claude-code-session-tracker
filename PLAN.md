@@ -112,7 +112,9 @@ export interface SessionSource {
   id: string;                        // 'claude-code'
   isAvailable(): Promise<boolean>;   // does ~/.claude exist?
   listLive(): Promise<Session[]>;    // cheap, every poll
-  listRecent(o: { limit: number }): Promise<Session[]>;  // cheap-ish, cached
+  // cheap-ish, cached; `include` names ids to resolve whatever the limit
+  listRecent(o: { limit: number; include?: readonly string[] }):
+    Promise<{ sessions: Session[]; total: number }>;
   detail(id: string): Promise<SessionDetail>;            // expensive, on demand
 }
 ```
@@ -131,11 +133,13 @@ interface Session {
   project: { name: string; path: string; slug: string; gitBranch?: string };
   title?: string;             // ai-title
   lastPrompt?: string;
+  firstPrompt?: string;
   name?: string;              // 'timfog-fs-f0'
   live?: { pid: number; procStart: string; kind: string; entrypoint: string };
   startedAt: number;
   lastActiveAt: number;
   version?: string;
+  model?: string;             // last assistant turn
   sizeBytes?: number;
   transcriptPath?: string;
 }
@@ -145,7 +149,6 @@ interface SessionDetail extends Session {   // computed lazily, full-stream
   tokens: { input: number; output: number; cacheRead: number; cacheCreate: number };
   models: string[];
   awaySummary?: string;
-  firstPrompt?: string;
 }
 ```
 
@@ -199,7 +202,7 @@ Each phase ends with something runnable. No phase depends on a later one.
 - *Also:* liveness is decided per record, not per pid, so two records naming the same
   pid cannot vouch for each other.
 
-### Phase 2 — Recent sessions from transcripts  *(~1 day)*  ← the hard one
+### Phase 2 — Recent sessions from transcripts  *(~1 day)*  ✅ **DONE**
 - `readdir` + `stat` pass over `~/.claude/projects/*` for the candidate list and mtimes.
   No file contents read at this stage.
 - For the top N by mtime: **tail-read last 64 KB** (`ai-title`, `last-prompt`, last `assistant`
@@ -212,6 +215,35 @@ Each phase ends with something runnable. No phase depends on a later one.
 - UI: "Active" section above "Recent", client-side search box, `?limit=` param.
 - **Done when:** all 869 files list in < 500 ms warm / < 1.5 s cold. (Shell tail-reading
   every file already measures 1.3 s — Node with parallel FDs will beat it.)
+- *Landed:* `transcripts.ts` (candidates → head/tail read → facts), `core/cache.ts`,
+  a filesystem-validated slug decoder, and the two-table UI with a filter box.
+  **794 transcripts / 830 MB list in 234 ms cold and ~72 ms warm** — comfortably inside
+  the budget, because the sort only needs `stat` and the reads only touch the ends.
+  Verified against the real directory plus fixtures covering an empty file, a file of
+  pure garbage, good records buried in broken ones, a 6 MB middle, multi-byte characters
+  straddling both slice boundaries, a session with no `cwd`, one with no timestamps
+  anywhere, and one that is nothing but a slash command.
+- *Window sizes are measured, not guessed:* every transcript that has an `ai-title` at all
+  has one inside the last 64 KB (692 of 790 have one; the other 98 never got a title), and
+  786 of 790 yield a first prompt inside the first 16 KB. Widening either window buys nothing.
+- *Four things the data forced:*
+  - **`last-prompt` has two shapes.** 71 files carry `{ leafUuid }` with no text, and that
+    uuid points at the leaf of the conversation tree — often an `attachment`, not the prompt.
+    Chasing parent pointers would mean reading the middle, so the fallback re-reads the tail
+    for the last real user message instead. Missing prompts: 73 → 4.
+  - **Transcripts open with plumbing.** A `/clear`, its caveat block, the context a slash
+    command pasted in. The first prompt is the first record that survives stripping those,
+    with a command used only when it is all there is — a 2 KB session that is nothing but
+    `/clear` is honestly summarised as `/clear`.
+  - **Slug decoding needs the filesystem, not a heuristic.** `-Users-yusuf-Tivi-Tivi-FE` could
+    be `Tivi/FE`, `Tivi.FE`, `Tivi_FE` or `Tivi-FE`. Rather than guess, the walk asks each
+    directory which of its entries slugify to the tokens still to be placed, longest match
+    first. It only ever runs for a transcript with no `cwd` — 1 file in 790.
+  - **`limit` must not truncate running sessions.** They are the point of the tool, so the
+    registry caps only the history underneath, and names the live ids to the transcript
+    reader so a long-idle session still gets its title even from outside the top N.
+- *Also:* `[hidden]` needed `display: none !important` — a class that sets `display` outranks
+  the UA rule, so the "Show more" control stayed visible after everything had loaded.
 
 ### Phase 3 — Detail panel  *(~1 day)*
 - `/api/sessions/:id` streams the file line-by-line (`readline`, never `readFileSync`) to

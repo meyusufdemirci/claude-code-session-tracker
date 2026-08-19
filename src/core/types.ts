@@ -35,11 +35,15 @@ export interface Session {
   /** Short derived handle, e.g. `timfog-fs-f0`. */
   name?: string;
   lastPrompt?: string;
+  /** The opening ask, recovered from the head of the transcript. */
+  firstPrompt?: string;
   live?: SessionLiveInfo;
   startedAt: number;
   lastActiveAt: number;
   /** Claude Code version that wrote the session. */
   version?: string;
+  /** Model on the most recent assistant turn, e.g. `claude-opus-5`. */
+  model?: string;
   transcriptPath?: string;
   sizeBytes?: number;
 }
@@ -55,7 +59,6 @@ export interface SessionDetail extends Session {
   counts: { user: number; assistant: number; tool: number; subagents: number };
   tokens: SessionTokenTotals;
   models: string[];
-  firstPrompt?: string;
   awaySummary?: string;
   /** Lines we could not parse. Non-zero means the transcript format drifted. */
   skippedLines: number;

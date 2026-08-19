@@ -21,6 +21,7 @@ const HELP = `
         --host <address>  Address to bind (default ${DEFAULT_HOST})
         --no-open         Do not open a browser
         --json            Print the session list as JSON and exit
+    -n, --limit <number>  How many sessions to list (default 50, running ones are always shown)
         --claude-dir <p>  Override the Claude data directory (default $CLAUDE_CONFIG_DIR or ~/.claude)
     -h, --help            Show this message
     -v, --version         Show the version
@@ -39,6 +40,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
         open: { type: 'boolean', default: true },
         'no-open': { type: 'boolean' },
         json: { type: 'boolean', default: false },
+        limit: { type: 'string', short: 'n' },
         'claude-dir': { type: 'string' },
         help: { type: 'boolean', short: 'h', default: false },
         version: { type: 'boolean', short: 'v', default: false },
@@ -70,6 +72,15 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     }
   }
 
+  let limit: number | undefined;
+  if (values.limit !== undefined) {
+    limit = Number.parseInt(values.limit, 10);
+    if (!Number.isInteger(limit) || limit < 1) {
+      process.stderr.write(`Invalid limit: ${values.limit}\n`);
+      return 1;
+    }
+  }
+
   const config = createConfig({
     port,
     host: values.host ?? DEFAULT_HOST,
@@ -79,7 +90,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   const registry = new SessionRegistry(config);
 
   if (values.json) {
-    process.stdout.write(`${JSON.stringify(await registry.list(), null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(await registry.list({ limit }), null, 2)}\n`);
     return 0;
   }
 
@@ -94,7 +105,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
 
   const server = createServer({ config, registry });
   const boundPort = await listen(server, config);
-  const url = `http://${config.host}:${boundPort}`;
+  // The page reads its own limit from the query string, so `--limit` carries through.
+  const url = `http://${config.host}:${boundPort}${limit === undefined ? '' : `/?limit=${limit}`}`;
 
   process.stdout.write(`\n  Claude Code sessions  ${url}\n  Reading  ${config.claudeDir}\n\n  Press Ctrl+C to stop.\n\n`);
 

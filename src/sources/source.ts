@@ -1,5 +1,11 @@
 import type { Session, SessionDetail } from '../core/types.ts';
 
+export interface RecentSessions {
+  sessions: Session[];
+  /** How many the source could have returned, before `limit`. Lets the UI say "50 of 790". */
+  total: number;
+}
+
 /**
  * The single seam the whole tool hangs off.
  *
@@ -17,8 +23,14 @@ export interface SessionSource {
   /** Currently running sessions. Cheap enough to call on every poll. */
   listLive(): Promise<Session[]>;
 
-  /** Recently finished sessions, newest first. Cached; never reads whole transcripts. */
-  listRecent(options: { limit: number }): Promise<Session[]>;
+  /**
+   * Recently finished sessions, newest first. Cached; never reads whole transcripts.
+   *
+   * `include` names sessions that must be resolved even if they fall outside
+   * `limit` — the registry uses it so a long-idle live session still gets its
+   * title and prompt, rather than showing as a bare row.
+   */
+  listRecent(options: { limit: number; include?: readonly string[] }): Promise<RecentSessions>;
 
   /** Full stats for one session. Expensive, so only ever called on demand. */
   detail(id: string): Promise<SessionDetail | null>;

@@ -20,13 +20,27 @@
       </div>
     </header>
 
+    <div class="toolbar">
+      <label class="search">
+        <span class="visually-hidden">Filter sessions</span>
+        <input
+          id="search"
+          type="search"
+          placeholder="Filter by project, title, prompt, branch…"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </label>
+      <p class="hint" id="search-hint" aria-live="polite"></p>
+    </div>
+
     <main>
       <section class="panel">
-        <h2>Active <span class="count" id="sessions-count"></span></h2>
+        <h2>Active <span class="count" id="live-count"></span></h2>
 
-        <p class="empty" id="sessions-empty">Looking for running sessions…</p>
+        <p class="empty" id="live-empty">Looking for running sessions…</p>
 
-        <div class="scroller" id="sessions-wrap" hidden>
+        <div class="scroller" id="live-wrap" hidden>
           <table class="grid">
             <thead>
               <tr>
@@ -39,9 +53,36 @@
                 <th scope="col" class="num">PID</th>
               </tr>
             </thead>
-            <tbody id="sessions-body"></tbody>
+            <tbody id="live-body"></tbody>
           </table>
         </div>
+      </section>
+
+      <section class="panel">
+        <h2>Recent <span class="count" id="recent-count"></span></h2>
+
+        <p class="empty" id="recent-empty">Reading transcripts…</p>
+
+        <div class="scroller" id="recent-wrap" hidden>
+          <table class="grid">
+            <thead>
+              <tr>
+                <th scope="col">Project</th>
+                <th scope="col">Session</th>
+                <th scope="col">Branch</th>
+                <th scope="col">Model</th>
+                <th scope="col" class="num">Last active</th>
+                <th scope="col" class="num">Size</th>
+              </tr>
+            </thead>
+            <tbody id="recent-body"></tbody>
+          </table>
+        </div>
+
+        <p class="more" id="more" hidden>
+          <button type="button" id="more-button">Show more</button>
+          <span id="more-note"></span>
+        </p>
       </section>
 
       <section class="panel">

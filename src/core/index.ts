@@ -18,5 +18,8 @@ export type {
 export { SessionRegistry } from './registry.ts';
 export type { SessionListResult, SourceStatus } from './registry.ts';
 
-export type { SessionSource } from '../sources/source.ts';
+export { FileCache } from './cache.ts';
+export type { FileStamp } from './cache.ts';
+
+export type { RecentSessions, SessionSource } from '../sources/source.ts';
 export { ClaudeCodeSource } from '../sources/claude-code/index.ts';
