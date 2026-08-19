@@ -21,9 +21,27 @@
     </header>
 
     <main>
-      <section class="panel" id="sessions-panel">
-        <h2>Active</h2>
-        <p class="empty" id="sessions-empty">No sessions yet — listings arrive in Phase 1.</p>
+      <section class="panel">
+        <h2>Active <span class="count" id="sessions-count"></span></h2>
+
+        <p class="empty" id="sessions-empty">Looking for running sessions…</p>
+
+        <div class="scroller" id="sessions-wrap" hidden>
+          <table class="grid">
+            <thead>
+              <tr>
+                <th scope="col">Project</th>
+                <th scope="col">Session</th>
+                <th scope="col">Status</th>
+                <th scope="col">Branch</th>
+                <th scope="col" class="num">Uptime</th>
+                <th scope="col">Version</th>
+                <th scope="col" class="num">PID</th>
+              </tr>
+            </thead>
+            <tbody id="sessions-body"></tbody>
+          </table>
+        </div>
       </section>
 
       <section class="panel">

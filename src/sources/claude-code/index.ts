@@ -2,12 +2,13 @@ import { access } from 'node:fs/promises';
 import type { TrackerConfig } from '../../config.ts';
 import type { Session, SessionDetail } from '../../core/types.ts';
 import type { SessionSource } from '../source.ts';
+import { listLiveSessions } from './live.ts';
 
 /**
  * Reads sessions out of `~/.claude`.
  *
- * Phase 0 wires the source up and reports availability. `live.ts` (Phase 1) and
- * `transcripts.ts` (Phase 2) fill in the listings behind this same interface.
+ * `live.ts` covers the running sessions. `transcripts.ts` (Phase 2) will fill in
+ * the finished ones behind this same interface.
  */
 export class ClaudeCodeSource implements SessionSource {
   readonly id = 'claude-code';
@@ -29,7 +30,7 @@ export class ClaudeCodeSource implements SessionSource {
   }
 
   async listLive(): Promise<Session[]> {
-    return [];
+    return listLiveSessions(this.#config);
   }
 
   async listRecent(_options: { limit: number }): Promise<Session[]> {

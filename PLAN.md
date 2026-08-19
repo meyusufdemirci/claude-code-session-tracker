@@ -85,7 +85,9 @@ claude-code-session-tracker/
 │   │   ├── source.ts      # interface SessionSource
 │   │   └── claude-code/
 │   │       ├── index.ts
-│   │       ├── live.ts        # A: ~/.claude/sessions/*.json + pid liveness
+│   │       ├── live.ts        # A: ~/.claude/sessions/*.json → Session records
+│   │       ├── liveness.ts    # pid + start-time check, so stale files never show
+│   │       ├── git.ts         # current branch from .git/HEAD
 │   │       ├── transcripts.ts # B: jsonl head/tail reads, never full
 │   │       ├── projects.ts    # C: ~/.claude.json rollup
 │   │       └── slug.ts        # slug ⇄ path decoding
@@ -163,7 +165,7 @@ v1 client **polls `/api/sessions` every 2 s**. SSE is a Phase 5 upgrade, not a v
 
 Each phase ends with something runnable. No phase depends on a later one.
 
-### Phase 0 — Scaffold that already works via npx  *(~half a day)*
+### Phase 0 — Scaffold that already works via npx  *(~half a day)*  ✅ **DONE**
 - `package.json`: `"type": "module"`, `"bin": { "claude-code-session-tracker": "./dist/cli.js" }`,
   `"engines": { "node": ">=20" }`, `"files": ["dist"]`, no `postinstall`.
 - `tsc` build → `dist`; shebang preserved, `chmod +x` in the build script.
@@ -171,8 +173,11 @@ Each phase ends with something runnable. No phase depends on a later one.
   `--json`, `--help`, `--version`.
 - Server returns a static "hello" page.
 - **Done when:** `npm pack` → `npx ./claude-code-session-tracker-0.1.0.tgz` serves the page.
+- *Landed:* zero-dep ESM build (`tsc` + `scripts/build.js`), all flags above, port auto-increment,
+  loopback-only bind with a Host-header guard against DNS rebinding, `CLAUDE_CONFIG_DIR` honoured,
+  and the `SessionSource` seam stubbed so Phase 1 only fills in `live.ts`.
 
-### Phase 1 — Live sessions  *(~half a day)*
+### Phase 1 — Live sessions  *(~half a day)*  ✅ **DONE**
 - `sources/claude-code/live.ts`: glob `~/.claude/sessions/*.json`, parse, filter dead PIDs.
 - Liveness: `process.kill(pid, 0)` **and** cross-check `procStart` against the real process
   start time — guards against PID reuse showing a stale session as running.
@@ -180,6 +185,19 @@ Each phase ends with something runnable. No phase depends on a later one.
 - UI: one table — project name · session name · status badge · branch · uptime · version · PID.
 - **Done when:** starting a `claude` in another terminal makes a row appear within 2 s,
   and its badge flips `busy` → `waiting` as it asks for input.
+- *Landed:* `live.ts` (read + validate), `liveness.ts` (the two-gate pid check),
+  `slug.ts`, `git.ts`. Verified against 6 real sessions plus fixtures covering a
+  recycled pid, a dead pid, a missing/garbage `procStart`, malformed JSON, and a
+  record with no session id — each handled as intended.
+- *Two things the data forced:*
+  - **`procStart` is UTC, `ps` prints local.** A session recorded at `05:30:26` shows
+    as `08:30:26` under `ps` in a UTC+3 zone. A naive string compare would have marked
+    every session dead, so the check parses both readings and accepts either.
+  - **Branch comes from `.git/HEAD`, not the transcript.** Live records carry no branch,
+    and a running session's *current* branch is what the row should show — the transcript
+    only knows the branch as of its last message. Two small reads, no `git` subprocess.
+- *Also:* liveness is decided per record, not per pid, so two records naming the same
+  pid cannot vouch for each other.
 
 ### Phase 2 — Recent sessions from transcripts  *(~1 day)*  ← the hard one
 - `readdir` + `stat` pass over `~/.claude/projects/*` for the candidate list and mtimes.

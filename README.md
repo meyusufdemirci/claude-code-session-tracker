@@ -46,8 +46,9 @@ Everything comes from what Claude Code already writes to disk:
 | Path | Used for |
 | --- | --- |
 | `~/.claude/sessions/<pid>.json` | Running sessions and their live status |
-| `~/.claude/projects/**/*.jsonl` | Session history, titles, models, token counts |
-| `~/.claude.json` | Per-project rollup metrics |
+| `<session cwd>/.git/HEAD` | The branch a running session is on |
+| `~/.claude/projects/**/*.jsonl` | Session history, titles, models, token counts *(Phase 2)* |
+| `~/.claude.json` | Per-project rollup metrics *(Phase 2)* |
 
 Set `CLAUDE_CONFIG_DIR` (or pass `--claude-dir`) if your Claude data lives
 somewhere other than `~/.claude`.
@@ -81,8 +82,15 @@ Project plan and phase breakdown: [`PLAN.md`](./PLAN.md).
 
 ## Status
 
-Phase 0 complete: CLI, server, static shell, and the source interface are in
-place. Session listings land in Phase 1.
+Phases 0 and 1 complete. The dashboard lists every **running** session — project,
+session name, live status badge, git branch, uptime, Claude Code version, and PID —
+polled every 2 seconds.
+
+Session files outlive the processes that write them, so each one is checked twice
+before it becomes a row: `process.kill(pid, 0)`, then the recorded start time
+against the real one, which is what rules out a recycled PID.
+
+Recently *finished* sessions, read from transcripts, land in Phase 2.
 
 ## License
 
