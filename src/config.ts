@@ -15,7 +15,7 @@ export interface TrackerConfig {
   port: number;
 }
 
-export const DEFAULT_PORT = 4747;
+export const DEFAULT_PORT = 3099;
 export const DEFAULT_HOST = '127.0.0.1';
 
 /**

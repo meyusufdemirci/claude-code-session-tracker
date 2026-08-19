@@ -12,7 +12,7 @@ project, with live status, titles, and token usage.
 npx claude-code-session-tracker
 ```
 
-Then open the printed `http://127.0.0.1:4747`.
+Then open the printed `http://127.0.0.1:3099`.
 
 Run Claude Code in four terminals and you lose track of which one is waiting on
 you, which is still working, and what you asked the one you abandoned yesterday.
@@ -55,7 +55,7 @@ runner behaves the same.
 
 | Flag | Description |
 | --- | --- |
-| `-p, --port <number>` | Port to listen on, stepping forward up to 20 times if taken (default `4747`) |
+| `-p, --port <number>` | Port to listen on, stepping forward up to 20 times if taken (default `3099`) |
 | `--host <address>` | Address to bind (default `127.0.0.1` — see the warning below) |
 | `--no-open` | Do not open a browser |
 | `--json` | Print the session list as JSON and exit |
@@ -166,12 +166,12 @@ so, loudly, before it starts.
 For a machine you are SSH'd into, forward the port instead of opening the bind:
 
 ```sh
-ssh -L 4747:127.0.0.1:4747 you@the-machine
+ssh -L 3099:127.0.0.1:3099 you@the-machine
 ```
 
 ## Troubleshooting
 
-**Nothing is listed.** Check `curl -s 127.0.0.1:4747/api/health` — it prints the
+**Nothing is listed.** Check `curl -s 127.0.0.1:3099/api/health` — it prints the
 directory that was searched. If that is not where your transcripts are, set
 `CLAUDE_CONFIG_DIR` or pass `--claude-dir`.
 
