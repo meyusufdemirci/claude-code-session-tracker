@@ -1,35 +1,38 @@
 /* Two palettes, one selector each.
    The theme is resolved to a literal `light`/`dark` before first paint by the
    inline script in the page head, so there is no `prefers-color-scheme` query
-   here — "system" is a stored preference, not a third set of colours. */
+   here — "system" is a stored preference, not a third set of colours.
+   Colours are Anthropic's brand palette (anthropics/skills brand-guidelines):
+   dark #141413, light #faf9f5, mid grey #b0aea5, light grey #e8e6dc, and the
+   orange/blue/green accent trio, tinted for each theme's contrast needs. */
 :root {
   color-scheme: light;
-  --ground: #f2f6f6;
+  --ground: #faf9f5;
   --surface: #ffffff;
-  --ink: #0e2226;
-  --ink-soft: #455f65;
-  --ink-faint: #7a9297;
-  --rule: #d6e2e2;
-  --accent: #00707a;
-  --ok: #0d7a5f;
-  --warn: #9a6206;
-  --bad: #b0500c;
-  --zebra: #f8fbfb;
+  --ink: #141413;
+  --ink-soft: #5c5a52;
+  --ink-faint: #8a8778;
+  --rule: #e8e6dc;
+  --accent: #d97757;
+  --ok: #788c5d;
+  --warn: #b8862d;
+  --bad: #c1442e;
+  --zebra: #f5f3ec;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --ground: #0a1416;
-  --surface: #101e20;
-  --ink: #e2eceb;
-  --ink-soft: #9cb2b4;
-  --ink-faint: #6c8487;
-  --rule: #22383a;
-  --accent: #4ec3c9;
-  --ok: #4fb894;
-  --warn: #d7a24a;
-  --bad: #e8925a;
-  --zebra: #122325;
+  --ground: #141413;
+  --surface: #1f1e1c;
+  --ink: #faf9f5;
+  --ink-soft: #c9c7ba;
+  --ink-faint: #8f8d7c;
+  --rule: #33322c;
+  --accent: #e0876a;
+  --ok: #93a878;
+  --warn: #d3a256;
+  --bad: #d9614a;
+  --zebra: #1a1917;
 }
 
 * { box-sizing: border-box; }
