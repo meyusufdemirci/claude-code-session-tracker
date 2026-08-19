@@ -9,7 +9,8 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, accessSync, constants } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const BIN = 'claude-code-session-tracker';
 const [tarballArg, manager = 'npm'] = process.argv.slice(2);
@@ -54,7 +55,16 @@ try {
 
   // Written rather than `<manager> init` because each one writes a different file,
   // and only one field here matters: that this is not a package we publish.
-  writeFileSync(join(probe, 'package.json'), JSON.stringify({ name: 'cst-smoke', version: '0.0.0', private: true }, null, 2));
+  const probePkg = { name: 'cst-smoke', version: '0.0.0', private: true };
+  // A bare temp project has no packageManager pin, so an unpinned `pnpm add` lets
+  // Corepack fetch whatever is "latest" on the registry — which has outrun what
+  // older Node majors in the CI matrix can run. Pin the same pnpm this repo pins.
+  if (manager === 'pnpm') {
+    const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
+    const rootPkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8'));
+    probePkg.packageManager = rootPkg.packageManager;
+  }
+  writeFileSync(join(probe, 'package.json'), JSON.stringify(probePkg, null, 2));
   // Yarn 4 defaults to Plug'n'Play, which has no `node_modules/.bin` to run.
   // Yarn 1 ignores this file, so it is safe to write either way.
   writeFileSync(join(probe, '.yarnrc.yml'), 'nodeLinker: node-modules\n');
