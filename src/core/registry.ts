@@ -94,11 +94,22 @@ export class SessionRegistry {
     };
   }
 
+  /**
+   * One session, read in full.
+   *
+   * The same merge rule as `list()`: the transcript supplies the history and the
+   * totals, the live registry overrides status, pid and current branch — so a panel
+   * open on a running session says `busy`, not `ended`.
+   */
   async detail(id: string): Promise<SessionDetail | null> {
     for (const source of this.sources) {
       if (!(await source.isAvailable())) continue;
+
       const detail = await source.detail(id);
-      if (detail) return detail;
+      if (!detail) continue;
+
+      const live = (await source.listLive()).find((session) => session.id === id);
+      return live ? { ...detail, ...live } : detail;
     }
     return null;
   }

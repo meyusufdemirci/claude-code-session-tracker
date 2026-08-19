@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createConfig, DEFAULT_HOST, DEFAULT_PORT } from './config.ts';
 import { SessionRegistry } from './core/registry.ts';
+import { openBrowser } from './desktop.ts';
 import { createServer, listen } from './server.ts';
 import { VERSION } from './version.ts';
 
@@ -124,23 +124,6 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   });
 
   return 0;
-}
-
-function openBrowser(url: string): void {
-  const [command, args] =
-    process.platform === 'darwin'
-      ? (['open', [url]] as const)
-      : process.platform === 'win32'
-        ? (['cmd', ['/c', 'start', '', url]] as const)
-        : (['xdg-open', [url]] as const);
-
-  try {
-    const child = spawn(command, [...args], { stdio: 'ignore', detached: true });
-    child.on('error', () => {});
-    child.unref();
-  } catch {
-    // A missing browser opener is never a reason to fail; the URL is already printed.
-  }
 }
 
 /** True when run as a binary, false when imported. npm links `bin` as a symlink, so resolve it. */

@@ -5,6 +5,7 @@ import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { TrackerConfig } from './config.ts';
 import { SessionRegistry } from './core/registry.ts';
+import { revealInFileManager } from './desktop.ts';
 import { VERSION } from './version.ts';
 
 /** Static assets sit next to this module in both `src/` and `dist/`. */
@@ -50,13 +51,20 @@ async function handle(
     return;
   }
 
+  const url = new URL(req.url ?? '/', 'http://localhost');
+  const path = url.pathname;
+
+  // Ahead of the read-only gate below, because this is the one route that acts.
+  const revealMatch = /^\/api\/sessions\/([\w-]+)\/reveal$/.exec(path);
+  if (revealMatch?.[1]) {
+    await reveal(req, res, registry, revealMatch[1]);
+    return;
+  }
+
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     sendJson(res, 405, { error: `${req.method ?? 'Request'} not allowed` });
     return;
   }
-
-  const url = new URL(req.url ?? '/', 'http://localhost');
-  const path = url.pathname;
 
   if (path === '/api/health') {
     sendJson(res, 200, {
@@ -113,6 +121,53 @@ async function sendStatic(res: ServerResponse, path: string): Promise<void> {
   } catch {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('Not found\n');
+  }
+}
+
+/**
+ * Show one session's transcript in the file manager.
+ *
+ * Two things keep this narrow. The path is never taken from the request — the id is
+ * looked up and the transcript the source already vouches for is what gets revealed,
+ * so there is nothing to point at a file of the caller's choosing. And it is a POST
+ * with an origin check: the loopback guard above only proves the *address* was
+ * loopback, which a form on any website can arrange, whereas `Origin` is the
+ * browser's own account of who asked.
+ */
+async function reveal(
+  req: IncomingMessage,
+  res: ServerResponse,
+  registry: SessionRegistry,
+  id: string,
+): Promise<void> {
+  if (req.method !== 'POST') {
+    res.setHeader('allow', 'POST');
+    sendJson(res, 405, { error: 'Reveal must be a POST' });
+    return;
+  }
+
+  if (!isSameOrigin(req.headers.origin)) {
+    sendJson(res, 403, { error: 'Cross-origin request refused' });
+    return;
+  }
+
+  const detail = await registry.detail(id);
+  if (!detail?.transcriptPath) {
+    sendJson(res, 404, { error: 'No transcript on disk for this session' });
+    return;
+  }
+
+  revealInFileManager(detail.transcriptPath);
+  sendJson(res, 200, { ok: true, path: detail.transcriptPath });
+}
+
+/** Browsers always send `Origin` on a POST, so a missing one is not our page asking. */
+function isSameOrigin(origin: string | undefined): boolean {
+  if (!origin) return false;
+  try {
+    return isLoopback(new URL(origin).hostname);
+  } catch {
+    return false;
   }
 }
 

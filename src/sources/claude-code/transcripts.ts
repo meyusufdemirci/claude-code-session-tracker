@@ -65,14 +65,9 @@ export async function listRecentSessions(
     for (const candidate of candidates) if (wanted.delete(candidate.id)) chosen.push(candidate);
   }
 
-  const sessions = await mapLimit(chosen, MAX_OPEN_FILES, async (candidate) => {
-    const cached = cache.get(candidate.path, candidate);
-    if (cached) return cached;
-
-    const session = await readSession(candidate);
-    if (session) cache.set(candidate.path, candidate, session);
-    return session;
-  });
+  const sessions = await mapLimit(chosen, MAX_OPEN_FILES, (candidate) =>
+    loadSession(candidate, cache),
+  );
 
   return {
     sessions: sessions.filter((session): session is Session => session !== undefined),
@@ -81,7 +76,7 @@ export async function listRecentSessions(
 }
 
 /** A transcript we know the size and age of, but have not opened. */
-interface Candidate {
+export interface Candidate {
   id: string;
   path: string;
   slug: string;
@@ -133,6 +128,44 @@ async function listProject(projectsDir: string, slug: string): Promise<Candidate
   );
 
   return found.filter((candidate): candidate is Candidate => candidate !== undefined);
+}
+
+/**
+ * The cheap facts for one transcript, taken from the cache when the file has not
+ * moved since we last looked.
+ */
+export async function loadSession(
+  candidate: Candidate,
+  cache: FileCache<Session>,
+): Promise<Session | undefined> {
+  const cached = cache.get(candidate.path, candidate);
+  if (cached) return cached;
+
+  const session = await readSession(candidate);
+  if (session) cache.set(candidate.path, candidate, session);
+  return session;
+}
+
+/**
+ * Locate one transcript by session id.
+ *
+ * Costs the same `readdir` + `stat` sweep as the listing and reads no contents,
+ * which is cheap enough that the detail endpoint need not trust a stale index.
+ */
+export async function findCandidate(
+  projectsDir: string,
+  id: string,
+): Promise<Candidate | undefined> {
+  const wanted = id.toLowerCase();
+  const candidates = await listCandidates(projectsDir);
+  // A resumed session can leave a transcript in more than one project folder;
+  // the most recently written one is the live copy.
+  let best: Candidate | undefined;
+  for (const candidate of candidates) {
+    if (candidate.id !== wanted) continue;
+    if (!best || candidate.mtimeMs > best.mtimeMs) best = candidate;
+  }
+  return best;
 }
 
 async function readSession(candidate: Candidate): Promise<Session | undefined> {

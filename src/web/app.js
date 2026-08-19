@@ -4,6 +4,14 @@ const HEALTH_INTERVAL_MS = 15000;
 /** Uptime is redrawn on its own beat so the clock ticks between polls. */
 const TICK_MS = 1000;
 
+/**
+ * How often an open panel re-reads its session. Only for live ones — a finished
+ * transcript cannot change, and the server caches on mtime, so a re-read of a quiet
+ * session costs nothing anyway. Slower than the list poll because a live session's
+ * file really is being appended to, and each read streams the whole of it.
+ */
+const DETAIL_INTERVAL_MS = 10000;
+
 const DEFAULT_LIMIT = 50;
 /** Matches the server's ceiling; asking for more just gets clamped. */
 const MAX_LIMIT = 2000;
@@ -25,12 +33,23 @@ const state = {
   total: 0,
   query: '',
   limit: readLimit(),
+  /** Id of the session the panel is showing, or null when it is closed. */
+  openId: null,
+  /** The last detail we fetched, kept so a re-read can redraw without a flash of empty. */
+  detail: null,
 };
 
 async function getJson(path) {
   const response = await fetch(path, { headers: { accept: 'application/json' } });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
+}
+
+async function postJson(path) {
+  const response = await fetch(path, { method: 'POST', headers: { accept: 'application/json' } });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
+  return body;
 }
 
 /* ---------------------------------------------------------------- polling */
@@ -73,6 +92,8 @@ async function pollSessions() {
 
   setHealthState('ok', `connected · ${state.live.length} running`);
   render();
+  // A session that ended while the panel was open should stop claiming it is busy.
+  if (state.openId) syncPanelStatus();
 }
 
 /* ------------------------------------------------------------------ views */
@@ -107,9 +128,13 @@ function createTable({ body, wrap, empty, count, columns, fill, emptyText }) {
       if (!row) {
         row = document.createElement('tr');
         row.dataset.id = session.id;
+        row.tabIndex = 0;
+        row.setAttribute('role', 'button');
+        row.setAttribute('aria-label', `Open session details`);
         row.innerHTML = columns;
         rows.set(session.id, row);
       }
+      row.classList.toggle('is-open', session.id === state.openId);
       fill(cellSetter(row), session, row);
 
       // Only touch the DOM when the order actually changed. Re-appending every row
@@ -308,12 +333,227 @@ function formatWhen(at) {
   });
 }
 
+/** Thousands separators, in the reader's own locale. */
+function formatCount(value) {
+  return typeof value === 'number' ? value.toLocaleString() : '—';
+}
+
+/** A duration in prose: `2h 14m`, `9m 12s`, `41s`. Unlike uptime this never ticks. */
+function formatSpan(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  const seconds = Math.round(ms / 1000);
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  if (m) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+/** An absolute moment, because the panel is where you check exactly when. */
+function formatStamp(at) {
+  return at ? new Date(at).toLocaleString() : '—';
+}
+
 function formatBytes(bytes) {
   if (!bytes) return '—';
   const mb = bytes / 1048576;
   if (mb >= 10) return `${Math.round(mb)} MB`;
   if (mb >= 1) return `${mb.toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+
+/* ------------------------------------------------------------------- panel */
+
+const drawer = byId('drawer');
+const scrim = byId('scrim');
+
+/** The element focus came from, so closing the panel puts it back where it was. */
+let returnFocusTo = null;
+let detailTimer = null;
+/**
+ * Which fetch is current. A slow read of a large transcript must not overwrite the
+ * panel after the user has already moved to another session.
+ */
+let detailRequest = 0;
+
+function openPanel(id, source) {
+  if (!drawer) return;
+  returnFocusTo = source ?? null;
+  state.openId = id;
+  state.detail = null;
+
+  drawer.hidden = false;
+  if (scrim) scrim.hidden = false;
+  document.body.classList.add('drawer-open');
+
+  // Show what the list already knows so the panel is never blank while it loads.
+  const known = [...state.live, ...state.recent].find((session) => session.id === id);
+  setText('drawer-title', known ? headline(known) : 'Session');
+  setText('drawer-project', known ? known.project.name : '—');
+
+  byId('drawer-content').hidden = true;
+  byId('drawer-error').hidden = true;
+  byId('drawer-loading').hidden = false;
+  byId('drawer-body').scrollTop = 0;
+  byId('drawer-close')?.focus();
+
+  render();
+  loadDetail();
+  restartDetailTimer();
+}
+
+function closePanel() {
+  if (!drawer || drawer.hidden) return;
+  drawer.hidden = true;
+  if (scrim) scrim.hidden = true;
+  document.body.classList.remove('drawer-open');
+  state.openId = null;
+  state.detail = null;
+  stopDetailTimer();
+  render();
+
+  // Only take focus back if it is still inside the panel; the user may have clicked away.
+  if (returnFocusTo?.isConnected) returnFocusTo.focus();
+  returnFocusTo = null;
+}
+
+function restartDetailTimer() {
+  stopDetailTimer();
+  detailTimer = setInterval(() => {
+    // A finished session's numbers are final. Re-reading it would only re-stream a
+    // file that cannot have changed.
+    if (state.openId && state.detail?.live) loadDetail();
+  }, DETAIL_INTERVAL_MS);
+}
+
+function stopDetailTimer() {
+  if (detailTimer !== null) clearInterval(detailTimer);
+  detailTimer = null;
+}
+
+async function loadDetail() {
+  const id = state.openId;
+  const request = ++detailRequest;
+
+  let detail;
+  try {
+    detail = await getJson(`/api/sessions/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (request !== detailRequest || state.openId !== id) return;
+    byId('drawer-loading').hidden = true;
+    // A panel already showing numbers keeps them; a failure to refresh is not a reason
+    // to throw away what is on screen.
+    if (state.detail) return;
+    const failed = byId('drawer-error');
+    failed.hidden = false;
+    failed.textContent = `Could not read this session — ${error.message}`;
+    return;
+  }
+
+  if (request !== detailRequest || state.openId !== id) return;
+  state.detail = detail;
+  fillPanel(detail);
+}
+
+function fillPanel(detail) {
+  byId('drawer-loading').hidden = true;
+  byId('drawer-error').hidden = true;
+  byId('drawer-content').hidden = false;
+
+  setText('drawer-title', headline(detail));
+  setText('drawer-project', detail.project.name);
+  syncPanelStatus();
+
+  const summary = byId('d-summary');
+  summary.hidden = !detail.awaySummary;
+  if (detail.awaySummary) summary.textContent = detail.awaySummary;
+
+  setText('d-resume', `claude --resume ${detail.id}`);
+  setText('d-cwd', detail.project.path);
+
+  setText('d-user', formatCount(detail.counts.user));
+  setText('d-assistant', formatCount(detail.counts.assistant));
+  setText('d-tool', formatCount(detail.counts.tool));
+  setText('d-subagents', formatCount(detail.counts.subagents));
+
+  setText('d-in', formatCount(detail.tokens.input));
+  setText('d-out', formatCount(detail.tokens.output));
+  setText('d-cache-read', formatCount(detail.tokens.cacheRead));
+  setText('d-cache-create', formatCount(detail.tokens.cacheCreate));
+
+  setText('d-models', detail.models.map(shortModel).join(', ') || shortModel(detail.model) || '—');
+  setText('d-branch', detail.project.gitBranch ?? '—');
+  setText('d-started', formatStamp(detail.startedAt));
+  setText('d-last', formatStamp(detail.lastActiveAt));
+  setText('d-elapsed', formatSpan(detail.lastActiveAt - detail.startedAt));
+  setText('d-active', detail.activeMs === undefined ? '—' : formatSpan(detail.activeMs));
+  setText('d-version', detail.version ?? '—');
+  setText('d-size', formatBytes(detail.sizeBytes));
+
+  fillPrompt('d-prompt-first-wrap', 'd-prompt-first', detail.firstPrompt);
+  fillPrompt('d-prompt-last-wrap', 'd-prompt-last', detail.lastPrompt);
+  byId('d-prompts-section').hidden = !detail.firstPrompt && !detail.lastPrompt;
+
+  setText('d-path', detail.transcriptPath ?? '—');
+  byId('d-reveal').disabled = !detail.transcriptPath;
+
+  // Only worth saying when it is not zero: it means the format moved under us, or a
+  // record was too big to hold.
+  const notes = byId('d-notes');
+  const parts = [];
+  if (detail.notes?.unreadable) parts.push(`${detail.notes.unreadable} unreadable`);
+  if (detail.notes?.oversized) parts.push(`${detail.notes.oversized} too large to read`);
+  notes.hidden = parts.length === 0;
+  notes.textContent = parts.length ? `Records passed over: ${parts.join(' · ')}.` : '';
+}
+
+/**
+ * Status comes from the list poll rather than the detail read, so a running session's
+ * badge keeps up between the ten-second re-reads.
+ */
+function syncPanelStatus() {
+  const detail = state.detail;
+  if (!detail) return;
+
+  const current = [...state.live, ...state.recent].find((session) => session.id === detail.id);
+  const status = current?.status ?? detail.status;
+  const waitingFor = current?.waitingFor ?? detail.waitingFor;
+
+  byId('d-badge')?.setAttribute('data-status', status);
+  const text = byId('d-badge')?.querySelector('.badge-text');
+  if (text) text.textContent = STATUS_LABELS[status] ?? status;
+  setText('d-waiting', waitingFor ?? '');
+}
+
+function fillPrompt(wrapId, textId, value) {
+  const wrap = byId(wrapId);
+  wrap.hidden = !value;
+  if (value) byId(textId).textContent = value;
+}
+
+async function copyText(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+    flash(button, 'Copied', 'Copy');
+  } catch {
+    // `navigator.clipboard` needs a secure context; loopback counts as one, but a
+    // browser can still refuse. Saying so beats a button that silently does nothing.
+    flash(button, 'Select it', 'Copy');
+  }
+}
+
+/** Say something briefly on a control, then put it back the way it was. */
+const flashes = new WeakMap();
+function flash(node, message, restoreTo = '') {
+  if (!node) return;
+  node.textContent = message;
+  clearTimeout(flashes.get(node));
+  flashes.set(node, setTimeout(() => { node.textContent = restoreTo; }, 1800));
 }
 
 /* ------------------------------------------------------------------ wiring */
@@ -338,6 +578,73 @@ byId('search')?.addEventListener('input', (event) => {
 });
 
 byId('more-button')?.addEventListener('click', () => setLimit(state.limit * 4));
+
+// One listener per table rather than per row: rows come and go on every poll.
+for (const body of [byId('live-body'), byId('recent-body')]) {
+  body?.addEventListener('click', (event) => {
+    // Let a link or a button inside a row do its own job.
+    if (event.target.closest('button, a')) return;
+    const row = event.target.closest('tr[data-id]');
+    if (row) openPanel(row.dataset.id, row);
+  });
+
+  body?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const row = event.target.closest('tr[data-id]');
+    if (!row) return;
+    // Space scrolls the page by default, which is not what a pressed row should do.
+    event.preventDefault();
+    openPanel(row.dataset.id, row);
+  });
+}
+
+byId('drawer-close')?.addEventListener('click', closePanel);
+byId('scrim')?.addEventListener('click', closePanel);
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && state.openId) closePanel();
+});
+
+/**
+ * Keep Tab inside the panel while it is open.
+ *
+ * It is `aria-modal`, so letting focus wander into the table behind it would be a
+ * promise the page does not keep.
+ */
+byId('drawer')?.addEventListener('keydown', (event) => {
+  if (event.key !== 'Tab') return;
+  const focusable = [...byId('drawer').querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])')];
+  if (focusable.length === 0) return;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  } else if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  }
+});
+
+// Copy buttons name the element holding the text, so there is one handler for all.
+for (const button of document.querySelectorAll('.copy[data-copy]')) {
+  button.addEventListener('click', () => {
+    copyText(byId(button.dataset.copy)?.textContent ?? '', button);
+  });
+}
+
+byId('d-reveal')?.addEventListener('click', async () => {
+  const id = state.openId;
+  if (!id) return;
+  const note = byId('d-reveal-note');
+  try {
+    await postJson(`/api/sessions/${encodeURIComponent(id)}/reveal`);
+    flash(note, 'Opened in your file manager');
+  } catch (error) {
+    flash(note, `Could not open — ${error.message}`);
+  }
+});
 
 pollHealth();
 pollSessions();

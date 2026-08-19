@@ -8,7 +8,9 @@ export type { TrackerConfig } from '../config.ts';
 
 export type {
   Session,
+  SessionCounts,
   SessionDetail,
+  SessionDetailNotes,
   SessionLiveInfo,
   SessionProject,
   SessionStatus,

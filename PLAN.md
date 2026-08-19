@@ -76,6 +76,7 @@ claude-code-session-tracker/
 ├── src/
 │   ├── cli.ts             # flags, port pick, browser open
 │   ├── server.ts          # node:http — /api/* + static
+│   ├── desktop.ts         # open a browser, reveal a file — the only outward calls
 │   ├── config.ts          # paths, env overrides (CLAUDE_CONFIG_DIR)
 │   ├── core/
 │   │   ├── types.ts       # the Session contract — the stable centre
@@ -89,6 +90,8 @@ claude-code-session-tracker/
 │   │       ├── liveness.ts    # pid + start-time check, so stale files never show
 │   │       ├── git.ts         # current branch from .git/HEAD
 │   │       ├── transcripts.ts # B: jsonl head/tail reads, never full
+│   │       ├── detail.ts      # one session read in full — the only place that does
+│   │       ├── lines.ts       # bounded line reader; caps what one record can cost
 │   │       ├── projects.ts    # C: ~/.claude.json rollup
 │   │       └── slug.ts        # slug ⇄ path decoding
 │   └── web/               # copied verbatim to dist/web
@@ -149,6 +152,8 @@ interface SessionDetail extends Session {   // computed lazily, full-stream
   tokens: { input: number; output: number; cacheRead: number; cacheCreate: number };
   models: string[];
   awaySummary?: string;
+  activeMs?: number;                        // summed turn durations, not wall-clock
+  notes: { unreadable: number; oversized: number };   // what the read passed over
 }
 ```
 
@@ -159,6 +164,7 @@ interface SessionDetail extends Session {   // computed lazily, full-stream
 | `GET /api/sessions` | merged live + recent list | cached, ~100 ms warm |
 | `GET /api/sessions/:id` | `SessionDetail` | streams one file, on demand |
 | `GET /api/projects` | grouped rollup + `.claude.json` metrics | cheap |
+| `POST /api/sessions/:id/reveal` | shows the transcript in the file manager | free |
 
 v1 client **polls `/api/sessions` every 2 s**. SSE is a Phase 5 upgrade, not a v1 need.
 
@@ -245,13 +251,50 @@ Each phase ends with something runnable. No phase depends on a later one.
 - *Also:* `[hidden]` needed `display: none !important` — a class that sets `display` outranks
   the UA rule, so the "Show more" control stayed visible after everything had loaded.
 
-### Phase 3 — Detail panel  *(~1 day)*
-- `/api/sessions/:id` streams the file line-by-line (`readline`, never `readFileSync`) to
-  compute message counts, tool-call count, per-model token totals, duration, subagent count.
+### Phase 3 — Detail panel  *(~1 day)*  ✅ **DONE**
+- `/api/sessions/:id` streams the file line-by-line (never `readFileSync`) to compute
+  message counts, tool-call count, token totals, duration, subagent count.
 - Surface `away_summary`, first prompt, last prompt.
 - UI: click a row → side panel. Include a copyable `claude --resume <id>` and the cwd,
   plus "reveal transcript in Finder".
 - **Done when:** the 38 MB transcript opens in < 2 s and memory stays flat.
+- *Landed:* `lines.ts` (a bounded line reader), `detail.ts` (the streaming pass),
+  `desktop.ts` (the two places we ask the desktop to do something), a
+  `POST /api/sessions/:id/reveal` route, and the panel itself.
+  **The 37 MB transcript answers in 99 ms over HTTP**, 67 ms warm; the slowest of all
+  795 sessions is 140 ms. Every transcript on the machine was then read end to end:
+  795 of 795, zero throws, zero unreadable lines.
+- *Four things the data forced:*
+  - **One assistant turn is written as several records — and each repeats the turn's
+    token totals.** Claude Code writes one record per content block: the `thinking`,
+    the `text`, one per tool call. All of them carry the *same* `usage` object, so
+    summing per record inflates tokens by ~88% (90,387 records for 48,024 real turns).
+    The records of a turn are contiguous in all 48,024 cases, so collapsing them needs
+    only the previous id — not a set that grows with the file.
+  - **`readline` has no ceiling, and transcripts do.** The largest single record on
+    this machine is **9.4 MB** — a tool result — and reading the file with `readline`
+    pushed peak RSS to 187 MB against a 43 MB baseline. A reader that caps how much of
+    any one line it holds brings that to 95 MB and, more to the point, makes memory a
+    property of the reader rather than of the biggest tool output in the session.
+    The cap is 256 KB, measured not guessed: across 232,700 records every record above
+    it is a tool result, an attachment, or a meta record, while the largest `assistant`
+    record anywhere is 87 KB. Truncated records are counted and reported, never
+    silently dropped.
+  - **Tool results are `user` records.** They outnumber real messages ten to one
+    (54,043 against 4,628), so "messages" had to mean what the user typed — skipping
+    meta records, sidechains, and any turn whose content is nothing but tool results.
+  - **Wall-clock is the wrong duration.** `system`/`turn_duration` records appear in
+    93% of transcripts and sum to the time actually spent working, which is a small
+    fraction of the elapsed span — one real session spans 2h 32m and worked 25m of
+    it. The panel shows both, and reports no working time at all rather than `0` when
+    the records are absent.
+- *Also:* revealing a file is the one thing here that acts rather than reports, so it
+  is a POST with an `Origin` check. The loopback guard only proves the *address* was
+  loopback, which a form on any website can arrange; `Origin` is the browser's own
+  account of who asked. The path is never taken from the request — the id is looked up
+  and the transcript the source already vouches for is what gets revealed.
+- *Also:* `<synthetic>` is Claude Code's stand-in on messages it wrote itself rather
+  than a model anyone chose, so it is kept out of the model list. Its usage is zero.
 
 ### Phase 4 — Polish & publish  *(~half a day)*
 - Dark/light, empty state (no `~/.claude`), error states, keyboard nav, relative timestamps.
@@ -299,6 +342,8 @@ Works everywhere from day one, because of what we *don't* do:
 | slug → path decoding is ambiguous | prefer `cwd` from record contents; slug only as fallback |
 | prompts contain secrets | localhost bind only, no telemetry, no outbound calls, read-only |
 | `CLAUDE_CONFIG_DIR` set to a custom path | honour the env var in `config.ts` from Phase 0 |
+| a website POSTing to the reveal endpoint | `Origin` must be loopback; the path comes from our own lookup, never the request; spawned with an argument array, so no shell |
+| one enormous record exhausting memory | the detail reader caps how much of any single line it holds, and reports what it passed over |
 
 ---
 

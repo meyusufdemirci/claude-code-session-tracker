@@ -55,11 +55,36 @@ export interface SessionTokenTotals {
   cacheCreate: number;
 }
 
+export interface SessionCounts {
+  /** Messages the user actually sent. Tool results are not messages. */
+  user: number;
+  /** Assistant turns, not records — one turn is written as several records. */
+  assistant: number;
+  /** `tool_use` blocks across every turn. */
+  tool: number;
+  /** Transcripts under `<sessionId>/subagents/`. */
+  subagents: number;
+}
+
+/** What a full read had to pass over. Both being zero is the normal case. */
+export interface SessionDetailNotes {
+  /** Lines that were not valid JSON. Non-zero means the format drifted under us. */
+  unreadable: number;
+  /**
+   * Records too large to hold. Always a tool result, an attachment, or a meta
+   * record on the machine this was measured against — never a turn we count.
+   */
+  oversized: number;
+}
+
 export interface SessionDetail extends Session {
-  counts: { user: number; assistant: number; tool: number; subagents: number };
+  counts: SessionCounts;
   tokens: SessionTokenTotals;
+  /** Every model that answered in this session, in the order first seen. */
   models: string[];
+  /** Claude's own recap of what the session achieved, when it wrote one. */
   awaySummary?: string;
-  /** Lines we could not parse. Non-zero means the transcript format drifted. */
-  skippedLines: number;
+  /** Summed turn durations: time spent working, which is far less than wall-clock. */
+  activeMs?: number;
+  notes: SessionDetailNotes;
 }
