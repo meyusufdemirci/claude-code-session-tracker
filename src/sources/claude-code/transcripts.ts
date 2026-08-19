@@ -407,6 +407,15 @@ function pickPrompt(records: TranscriptRecord[], direction: 1 | -1): string | un
   return command;
 }
 
+/**
+ * What a single `user` record actually said, clipped for display — or nothing when
+ * the record is plumbing (a tool result, a meta record) rather than a prompt.
+ */
+export function promptText(record: TranscriptRecord): string | undefined {
+  const prompt = promptOf(record);
+  return prompt ? clip(prompt.text) : undefined;
+}
+
 /** The text a user record carries, or nothing when it is plumbing rather than a prompt. */
 function promptOf(record: TranscriptRecord): { text: string; isCommand: boolean } | undefined {
   if (str(record.type) !== 'user') return undefined;

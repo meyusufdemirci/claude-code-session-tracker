@@ -368,42 +368,27 @@ body.drawer-open { overflow: hidden; }
   font-size: .875rem;
 }
 
-/* A value with a copy button beside it. */
-.copyable { display: flex; align-items: stretch; gap: .4rem; margin-bottom: .45rem; }
-.copyable:last-child { margin-bottom: 0; }
-
-.copyable code {
-  flex: 1;
-  min-width: 0;
-  padding: .38rem .55rem;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  background: var(--ground);
-  font-size: .78rem;
-  overflow-x: auto;
-  white-space: nowrap;
-}
-
-.copy {
-  flex: none;
-  min-width: 4.2rem;
-  padding: .3rem .55rem;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  background: var(--surface);
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: .72rem;
-  cursor: pointer;
-}
-
-.copy:hover { border-color: var(--accent); color: var(--accent); }
-.copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-
 /* Numbers read as a row of figures, so they get their own denser grid. */
 .stats { margin: 0; display: grid; gap: .8rem 1rem; grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr)); }
 .stats > div { display: flex; flex-direction: column; gap: .1rem; }
 .stats dd { font-size: 1.05rem; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* One row per prompt, highest token usage first — the order the server sent them in. */
+.prompt-usage { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .5rem; }
+
+.prompt-usage-row { display: flex; align-items: baseline; gap: .8rem; }
+
+.prompt-usage-text {
+  flex: 1;
+  min-width: 0;
+  font-size: .85rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-usage-tokens { flex: none; font-size: .78rem; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
 
 .prompt { margin-bottom: .8rem; }
 .prompt:last-child { margin-bottom: 0; }
@@ -419,27 +404,6 @@ body.drawer-open { overflow: hidden; }
 }
 
 .prompt-text { margin: 0; font-size: .85rem; color: var(--ink-soft); overflow-wrap: anywhere; }
-
-.path { margin: 0 0 .7rem; font-size: .72rem; color: var(--ink-faint); overflow-wrap: anywhere; }
-
-.drawer-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin: 0; }
-
-.drawer-actions button {
-  padding: .35rem .8rem;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  background: var(--surface);
-  color: var(--ink-soft);
-  font: inherit;
-  font-size: .78rem;
-  cursor: pointer;
-}
-
-.drawer-actions button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.drawer-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.drawer-actions button:disabled { opacity: .5; cursor: default; }
-
-#d-notes { margin: .7rem 0 0; }
 
 /* On a phone the panel is the page. */
 @media (max-width: 34rem) {

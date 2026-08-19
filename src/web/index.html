@@ -184,28 +184,6 @@
           </section>
 
           <section class="drawer-section">
-            <h3>Resume</h3>
-            <div class="copyable">
-              <code id="d-resume" class="mono"></code>
-              <button type="button" class="copy" data-copy="d-resume">Copy</button>
-            </div>
-            <div class="copyable">
-              <code id="d-cwd" class="mono"></code>
-              <button type="button" class="copy" data-copy="d-cwd">Copy</button>
-            </div>
-          </section>
-
-          <section class="drawer-section">
-            <h3>Activity</h3>
-            <dl class="stats" id="d-stats">
-              <div><dt>Messages</dt><dd id="d-user">—</dd></div>
-              <div><dt>Turns</dt><dd id="d-assistant">—</dd></div>
-              <div><dt>Tool calls</dt><dd id="d-tool">—</dd></div>
-              <div><dt>Sub-agents</dt><dd id="d-subagents">—</dd></div>
-            </dl>
-          </section>
-
-          <section class="drawer-section">
             <h3>Tokens</h3>
             <dl class="stats" id="d-tokens">
               <div><dt>Input</dt><dd id="d-in">—</dd></div>
@@ -215,17 +193,19 @@
             </dl>
           </section>
 
+          <section class="drawer-section" id="d-prompt-usage-section">
+            <h3>Tokens by prompt</h3>
+            <ol class="prompt-usage" id="d-prompt-usage"></ol>
+          </section>
+
           <section class="drawer-section">
             <h3>Session</h3>
             <dl class="facts">
               <div><dt>Model</dt><dd id="d-models">—</dd></div>
-              <div><dt>Branch</dt><dd id="d-branch" class="mono">—</dd></div>
               <div><dt>Started</dt><dd id="d-started">—</dd></div>
               <div><dt>Last active</dt><dd id="d-last">—</dd></div>
               <div><dt>Elapsed</dt><dd id="d-elapsed">—</dd></div>
               <div><dt>Working time</dt><dd id="d-active">—</dd></div>
-              <div><dt>Version</dt><dd id="d-version" class="mono">—</dd></div>
-              <div><dt>Transcript</dt><dd id="d-size">—</dd></div>
             </dl>
           </section>
 
@@ -239,16 +219,6 @@
               <span class="prompt-label">Last</span>
               <p class="prompt-text" id="d-prompt-last"></p>
             </div>
-          </section>
-
-          <section class="drawer-section">
-            <h3>Transcript</h3>
-            <p class="path mono" id="d-path"></p>
-            <p class="drawer-actions">
-              <button type="button" id="d-reveal">Reveal in file manager</button>
-              <span class="hint" id="d-reveal-note" aria-live="polite"></span>
-            </p>
-            <p class="hint" id="d-notes" hidden></p>
           </section>
         </div>
 

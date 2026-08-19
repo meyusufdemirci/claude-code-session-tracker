@@ -7,10 +7,11 @@ import type {
   SessionCounts,
   SessionDetail,
   SessionDetailNotes,
+  SessionPromptUsage,
   SessionTokenTotals,
 } from '../../core/types.ts';
 import { readLines } from './lines.ts';
-import { findCandidate, loadSession, type Candidate } from './transcripts.ts';
+import { findCandidate, loadSession, promptText, type Candidate } from './transcripts.ts';
 import { addUsage } from './usage.ts';
 
 /**
@@ -65,6 +66,7 @@ interface Stats {
   models: string[];
   awaySummary?: string;
   activeMs?: number;
+  promptUsage: SessionPromptUsage[];
   notes: SessionDetailNotes;
 }
 
@@ -90,6 +92,11 @@ async function scan(candidate: Candidate): Promise<Stats> {
    * collapse them — no set of every id in the file, no memory that grows with length.
    */
   let previousTurn: string | undefined;
+
+  // Every real user record opens a new bucket; the assistant turns that follow it,
+  // up to the next one, are what it cost. Pushed to `promptUsage` as each closes.
+  const promptUsage: SessionPromptUsage[] = [];
+  let currentPrompt: SessionPromptUsage | undefined;
 
   for await (const line of readLines(candidate.path, MAX_RECORD_BYTES)) {
     if (line.truncated) {
@@ -127,6 +134,7 @@ async function scan(candidate: Candidate): Promise<Stats> {
           previousTurn = turn;
           counts.assistant += 1;
           addUsage(tokens, obj(message.usage));
+          if (currentPrompt) addUsage(currentPrompt.tokens, obj(message.usage));
         }
 
         const model = str(message.model);
@@ -136,7 +144,14 @@ async function scan(candidate: Candidate): Promise<Stats> {
       }
 
       case 'user':
-        if (isUserMessage(record)) counts.user += 1;
+        if (isUserMessage(record)) {
+          counts.user += 1;
+          if (currentPrompt) promptUsage.push(currentPrompt);
+          currentPrompt = {
+            text: promptText(record) ?? '(no text)',
+            tokens: { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 },
+          };
+        }
         break;
 
       case 'system': {
@@ -160,6 +175,8 @@ async function scan(candidate: Candidate): Promise<Stats> {
   }
 
   counts.subagents = await countSubagents(candidate);
+  if (currentPrompt) promptUsage.push(currentPrompt);
+  promptUsage.sort((a, b) => totalTokens(b.tokens) - totalTokens(a.tokens));
 
   return {
     counts,
@@ -168,8 +185,13 @@ async function scan(candidate: Candidate): Promise<Stats> {
     ...(awaySummary ? { awaySummary } : {}),
     // Zero and "never recorded" are different answers; only report a number we saw.
     ...(sawTurnDuration ? { activeMs } : {}),
+    promptUsage,
     notes,
   };
+}
+
+function totalTokens(tokens: SessionTokenTotals): number {
+  return tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreate;
 }
 
 /**

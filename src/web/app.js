@@ -50,13 +50,6 @@ async function getJson(path) {
   return response.json();
 }
 
-async function postJson(path) {
-  const response = await fetch(path, { method: 'POST', headers: { accept: 'application/json' } });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
-  return body;
-}
-
 /* ---------------------------------------------------------------- polling */
 
 const LIVE_BADGE_LABELS = { pending: 'Connecting', ok: 'Live', bad: 'Offline' };
@@ -435,15 +428,6 @@ function formatStamp(at) {
   return at ? `${new Date(at).toLocaleString()} · ${formatAgo(at)}` : '—';
 }
 
-function formatBytes(bytes) {
-  if (!bytes) return '—';
-  const mb = bytes / 1048576;
-  if (mb >= 10) return `${Math.round(mb)} MB`;
-  if (mb >= 1) return `${mb.toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-
 /* ------------------------------------------------------------------- panel */
 
 const drawer = byId('drawer');
@@ -550,43 +534,52 @@ function fillPanel(detail) {
   summary.hidden = !detail.awaySummary;
   if (detail.awaySummary) summary.textContent = detail.awaySummary;
 
-  setText('d-resume', `claude --resume ${detail.id}`);
-  setText('d-cwd', detail.project.path);
-
-  setText('d-user', formatCount(detail.counts.user));
-  setText('d-assistant', formatCount(detail.counts.assistant));
-  setText('d-tool', formatCount(detail.counts.tool));
-  setText('d-subagents', formatCount(detail.counts.subagents));
-
   setText('d-in', formatCount(detail.tokens.input));
   setText('d-out', formatCount(detail.tokens.output));
   setText('d-cache-read', formatCount(detail.tokens.cacheRead));
   setText('d-cache-create', formatCount(detail.tokens.cacheCreate));
 
+  fillPromptUsage(detail.promptUsage);
+
   setText('d-models', detail.models.map(shortModel).join(', ') || shortModel(detail.model) || '—');
-  setText('d-branch', detail.project.gitBranch ?? '—');
   setText('d-started', formatStamp(detail.startedAt));
   setText('d-last', formatStamp(detail.lastActiveAt));
   setText('d-elapsed', formatSpan(detail.lastActiveAt - detail.startedAt));
   setText('d-active', detail.activeMs === undefined ? '—' : formatSpan(detail.activeMs));
-  setText('d-version', detail.version ?? '—');
-  setText('d-size', formatBytes(detail.sizeBytes));
 
   fillPrompt('d-prompt-first-wrap', 'd-prompt-first', detail.firstPrompt);
   fillPrompt('d-prompt-last-wrap', 'd-prompt-last', detail.lastPrompt);
   byId('d-prompts-section').hidden = !detail.firstPrompt && !detail.lastPrompt;
+}
 
-  setText('d-path', detail.transcriptPath ?? '—');
-  byId('d-reveal').disabled = !detail.transcriptPath;
+/** Already sorted high to low by the server; the panel just lays it out. */
+function fillPromptUsage(promptUsage) {
+  const list = byId('d-prompt-usage');
+  const section = byId('d-prompt-usage-section');
+  if (!list || !section) return;
 
-  // Only worth saying when it is not zero: it means the format moved under us, or a
-  // record was too big to hold.
-  const notes = byId('d-notes');
-  const parts = [];
-  if (detail.notes?.unreadable) parts.push(`${detail.notes.unreadable} unreadable`);
-  if (detail.notes?.oversized) parts.push(`${detail.notes.oversized} too large to read`);
-  notes.hidden = parts.length === 0;
-  notes.textContent = parts.length ? `Records passed over: ${parts.join(' · ')}.` : '';
+  const entries = promptUsage ?? [];
+  section.hidden = entries.length === 0;
+  list.innerHTML = '';
+
+  for (const entry of entries) {
+    const item = document.createElement('li');
+    item.className = 'prompt-usage-row';
+
+    const text = document.createElement('span');
+    text.className = 'prompt-usage-text';
+    text.textContent = entry.text;
+    text.title = entry.text;
+
+    const tokens = document.createElement('span');
+    tokens.className = 'prompt-usage-tokens mono';
+    tokens.textContent = formatTokens(entry.tokens);
+    const title = tokensTitle(entry.tokens);
+    if (title) tokens.title = title;
+
+    item.append(text, tokens);
+    list.append(item);
+  }
 }
 
 /**
@@ -611,26 +604,6 @@ function fillPrompt(wrapId, textId, value) {
   const wrap = byId(wrapId);
   wrap.hidden = !value;
   if (value) byId(textId).textContent = value;
-}
-
-async function copyText(text, button) {
-  try {
-    await navigator.clipboard.writeText(text);
-    flash(button, 'Copied', 'Copy');
-  } catch {
-    // `navigator.clipboard` needs a secure context; loopback counts as one, but a
-    // browser can still refuse. Saying so beats a button that silently does nothing.
-    flash(button, 'Select it', 'Copy');
-  }
-}
-
-/** Say something briefly on a control, then put it back the way it was. */
-const flashes = new WeakMap();
-function flash(node, message, restoreTo = '') {
-  if (!node) return;
-  node.textContent = message;
-  clearTimeout(flashes.get(node));
-  flashes.set(node, setTimeout(() => { node.textContent = restoreTo; }, 1800));
 }
 
 /* ------------------------------------------------------------------- theme */
@@ -805,25 +778,6 @@ byId('drawer')?.addEventListener('keydown', (event) => {
   } else if (event.shiftKey && document.activeElement === first) {
     event.preventDefault();
     last.focus();
-  }
-});
-
-// Copy buttons name the element holding the text, so there is one handler for all.
-for (const button of document.querySelectorAll('.copy[data-copy]')) {
-  button.addEventListener('click', () => {
-    copyText(byId(button.dataset.copy)?.textContent ?? '', button);
-  });
-}
-
-byId('d-reveal')?.addEventListener('click', async () => {
-  const id = state.openId;
-  if (!id) return;
-  const note = byId('d-reveal-note');
-  try {
-    await postJson(`/api/sessions/${encodeURIComponent(id)}/reveal`);
-    flash(note, 'Opened in your file manager');
-  } catch (error) {
-    flash(note, `Could not open — ${error.message}`);
   }
 });
 

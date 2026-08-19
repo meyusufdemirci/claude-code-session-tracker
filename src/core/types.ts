@@ -78,6 +78,13 @@ export interface SessionDetailNotes {
   oversized: number;
 }
 
+/** Token usage attributed to the prompt that triggered it. */
+export interface SessionPromptUsage {
+  /** The prompt text that opened this turn, clipped like `firstPrompt`. */
+  text: string;
+  tokens: SessionTokenTotals;
+}
+
 export interface SessionDetail extends Session {
   counts: SessionCounts;
   tokens: SessionTokenTotals;
@@ -87,5 +94,7 @@ export interface SessionDetail extends Session {
   awaySummary?: string;
   /** Summed turn durations: time spent working, which is far less than wall-clock. */
   activeMs?: number;
+  /** One entry per user prompt, sorted by token usage, highest first. */
+  promptUsage: SessionPromptUsage[];
   notes: SessionDetailNotes;
 }
