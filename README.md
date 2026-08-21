@@ -24,7 +24,9 @@ else — and puts it on one page.
 - **Active sessions**, checked twice against the OS so a stale file or a
   recycled PID never shows up as running.
 - **Recent sessions** across every project, with Claude's own title, the first
-  and last prompt, the model, and the branch.
+  and last prompt, the model, and the branch — narrowed to today, yesterday, the
+  last 3, 7 or 30 days, or a date range of your own, and ordered by recency or by
+  token spend.
 - **A detail panel** per session: message and tool-call counts, token totals,
   elapsed and working time, subagent count, a copyable `claude --resume <id>`,
   and a button that shows the transcript in your file manager.
@@ -109,6 +111,8 @@ can do with `curl`:
 | Route | Returns |
 | --- | --- |
 | `GET /api/sessions?limit=N` | The list above. `limit` matches `--limit`, and running sessions are always included |
+| `GET /api/sessions?since=&until=` | The same list, narrowed to transcripts last written in that window. Epoch milliseconds; `since` is inclusive, `until` exclusive; either may be left off. Running sessions ignore it |
+| `GET /api/sessions?sort=` | `recent` (the default), `tokens-desc`, or `tokens-asc`. Ranks the finished sessions across the whole window, not just the page. An unknown value falls back to `recent` |
 | `GET /api/sessions/:id` | One session with `counts`, `tokens`, `models`, `activeMs`, `awaySummary`, and `notes` |
 | `GET /api/health` | `ok`, the version, the Node it runs on, the resolved Claude directory, and per-source status |
 | `POST /api/sessions/:id/reveal` | Shows that transcript in your file manager. Requires a loopback `Origin` |
@@ -132,6 +136,15 @@ Click any row for the full read. Everything has a key:
 The list refreshes every 2 seconds and says so when the server goes away. The
 page takes the same limit from the query string, so `?limit=200` and
 `--limit 200` show the same depth of history.
+
+**Range** and **Sort** above the Recent table narrow it to a stretch of history and
+order it by recency or by token spend. Both go into the query string alongside the
+limit — `?range=7d&sort=tokens-desc`, or `?range=custom&from=2026-08-01&to=2026-08-14`
+— so a reload comes back to the same view, and a bookmark keeps it. Ranges are whole
+local days, so "today" means since midnight rather than the last 24 hours. **Reset**
+appears beside them once either is off its default and puts both back; it leaves the
+text filter and how far you have paged alone. Neither control touches the Active
+table: a running session is shown whatever window is on screen.
 
 The theme follows your OS by default; **Auto / Light / Dark** in the top right
 overrides it, and the choice is remembered.
@@ -246,6 +259,14 @@ actually shown are opened, and only their first 16 KB and last 64 KB, which is w
 the title, the prompts, the model and the branch live. Results are memoised against
 each file's size and mtime, so an untouched transcript is never read twice. Listing
 all 794 transcripts on the development machine takes ~230 ms cold and ~75 ms warm.
+
+Both the date range and the sort are settled from that same sweep where they can be.
+A range is: `stat` already knows when each file was last written, so narrowing one
+costs nothing and opens fewer files than not narrowing it. Ordering by tokens is not
+— the totals are inside the transcripts — so it reads the whole range before it can
+rank it, which is what makes "the ten biggest sessions this week" the ten biggest of
+all 227 rather than of the ten on screen. That read is ~1.4 s cold for all 871
+transcripts on the development machine, and free once memoised.
 
 **Opening a session** streams its transcript once, line by line, capping how much of
 any single line it holds — the largest record on the development machine is 9.4 MB,

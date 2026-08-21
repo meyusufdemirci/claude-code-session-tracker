@@ -29,13 +29,62 @@ const setText = (id, value) => {
   if (node) node.textContent = value;
 };
 
+/**
+ * Where each range begins and ends, in local time.
+ *
+ * Counted in whole days rather than in hours: "today" means since midnight, not
+ * "the last 24 hours". A window that slides forward as the clock ticks is not one
+ * you can compare two readings of. `startOfDay` walks the calendar rather than
+ * subtracting milliseconds, so the two days a year that are not 24 hours long still
+ * begin at midnight like every other day.
+ */
+const RANGES = {
+  all: () => ({}),
+  today: () => ({ since: startOfDay(0) }),
+  yesterday: () => ({ since: startOfDay(1), until: startOfDay(0) }),
+  '3d': () => ({ since: startOfDay(2) }),
+  '7d': () => ({ since: startOfDay(6) }),
+  '30d': () => ({ since: startOfDay(29) }),
+  custom: () => customRange(),
+};
+
+/**
+ * How the Recent table is ordered. Matches the server's own orderings, which is what
+ * makes the two agree: the server ranks across the whole window and sends the top
+ * `limit` of it, and this puts the rows that survive the text filter back in that
+ * same order — including on the one poll that raced a change to the picker.
+ */
+const RECENT_ORDERS = {
+  recent: (a, b) => b.lastActiveAt - a.lastActiveAt,
+  'tokens-desc': (a, b) => totalTokens(b) - totalTokens(a) || b.lastActiveAt - a.lastActiveAt,
+  'tokens-asc': (a, b) => totalTokens(a) - totalTokens(b) || b.lastActiveAt - a.lastActiveAt,
+};
+
+/**
+ * Where the Recent controls sit when nobody has touched them.
+ *
+ * Said once, because three places lean on it — the fallbacks a hand-edited query
+ * string falls back to, the parameters `syncUrl` leaves out, and what Reset restores
+ * — and they would be a quiet bug apart.
+ */
+const DEFAULT_VIEW = { range: 'all', from: '', to: '', sort: 'recent' };
+
+const view = readView();
+
 const state = {
   live: [],
   recent: [],
-  /** Sessions on disk, which is more than we asked for whenever `limit` bites. */
+  /** Sessions in the window, which is more than we asked for whenever `limit` bites. */
   total: 0,
   query: '',
-  limit: readLimit(),
+  limit: view.limit,
+  /** Which of `RANGES` bounds the Recent table. `all` is every transcript on disk. */
+  range: view.range,
+  /** The two ends of the custom range, as the `YYYY-MM-DD` the date inputs speak. */
+  from: view.from,
+  to: view.to,
+  /** Which of `RECENT_ORDERS` the Recent table is in. */
+  sort: view.sort,
   /** Consecutive failed polls. One is a blip; two is worth interrupting for. */
   failures: 0,
   /** Id of the session the panel is showing, or null when it is closed. */
@@ -93,10 +142,55 @@ function renderAvailability(sources) {
   }
 }
 
+/**
+ * Whether a session poll is still out, and whether the window changed while it was.
+ *
+ * Ordering by tokens makes the server read every transcript in the window, and a
+ * first, cold read of a wide one can outlast the two seconds until the next tick.
+ * A tick that lands on a busy poll is dropped outright — the answer it would fetch
+ * is two seconds away anyway. A change of window is not droppable: what is on the
+ * wire answers the question the reader has already moved on from.
+ */
+let polling = false;
+let queued = false;
+
 async function pollSessions() {
+  if (polling) return;
+  polling = true;
+  try {
+    await fetchSessions();
+  } finally {
+    polling = false;
+    if (queued) {
+      queued = false;
+      void pollSessions();
+    }
+  }
+}
+
+/** The window or the ordering changed, so the rows on screen are for the old one. */
+function refetchSessions() {
+  queued = polling;
+  if (!polling) void pollSessions();
+}
+
+/**
+ * The window as query parameters. Epoch milliseconds rather than dates, because
+ * only the browser knows which midnight the reader means.
+ */
+function sessionsQuery() {
+  const params = new URLSearchParams({ limit: String(state.limit) });
+  const { since, until } = (RANGES[state.range] ?? RANGES.all)();
+  if (since !== undefined) params.set('since', String(since));
+  if (until !== undefined) params.set('until', String(until));
+  if (state.sort !== 'recent') params.set('sort', state.sort);
+  return params;
+}
+
+async function fetchSessions() {
   let result;
   try {
-    result = await getJson(`/api/sessions?limit=${state.limit}`);
+    result = await getJson(`/api/sessions?${sessionsQuery()}`);
   } catch (error) {
     state.failures += 1;
     setHealthState('bad', `disconnected · ${error.message}`);
@@ -246,7 +340,10 @@ const recentTable = createTable({
   wrap: byId('recent-wrap'),
   empty: byId('recent-empty'),
   count: 'recent-count',
-  emptyText: () => (state.query ? 'Nothing matches the filter.' : 'No transcripts found yet.'),
+  emptyText: () =>
+    state.query ? 'Nothing matches the filter.'
+    : state.range === 'all' ? 'No transcripts found yet.'
+    : 'No sessions in this date range.',
   columns: `
     ${PROJECT_CELL}
     ${SESSION_CELL}
@@ -264,8 +361,13 @@ const recentTable = createTable({
 });
 
 function render() {
+  // Only the Recent half takes the range and the ordering. A running session is the
+  // point of the tool, so it is shown whatever window is on screen, and busy-first is
+  // the only order that makes sense for a table you are watching rather than reading.
   const live = state.live.filter(matchesQuery).sort(byStatusThenProject);
-  const recent = state.recent.filter(matchesQuery).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  const recent = state.recent
+    .filter(matchesQuery)
+    .sort(RECENT_ORDERS[state.sort] ?? RECENT_ORDERS.recent);
 
   liveTable(live, live.length ? String(live.length) : '');
   recentTable(recent, recent.length ? String(recent.length) : '');
@@ -283,7 +385,11 @@ function renderMore(shown) {
 
   if (more) more.hidden = !canGrow;
   if (!canGrow) return;
-  setText('more-note', `${shownAll} of ${state.total} on disk${shown === shownAll ? '' : ` · ${shown} shown`}`);
+  const scope = state.range === 'all' ? 'on disk' : 'in range';
+  setText(
+    'more-note',
+    `${shownAll} of ${state.total} ${scope}${shown === shownAll ? '' : ` · ${shown} shown`}`,
+  );
 }
 
 function renderHint(shown) {
@@ -373,6 +479,51 @@ function formatWhen(at) {
     month: 'short',
     ...(sameYear ? {} : { year: 'numeric' }),
   });
+}
+
+/** Local midnight, `daysAgo` days back. */
+function startOfDay(daysAgo) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+  return date.getTime();
+}
+
+/**
+ * The custom range, read from the two date fields.
+ *
+ * Both ends are whole days and both are inclusive — the same date twice means that
+ * one day — and either may be left empty for an end that stays open.
+ */
+function customRange() {
+  let from = dayStart(state.from);
+  let to = dayStart(state.to);
+  // A backwards range is a slip of the picker, not a request for nothing.
+  if (from !== undefined && to !== undefined && from > to) [from, to] = [to, from];
+
+  return {
+    ...(from === undefined ? {} : { since: from }),
+    ...(to === undefined ? {} : { until: startOfNextDay(to) }),
+  };
+}
+
+/** Local midnight on a `YYYY-MM-DD`. `new Date(iso)` would read it as UTC and slip a day. */
+function dayStart(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? '');
+  if (!match) return undefined;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime();
+}
+
+/** The far end of an inclusive day, which is the exclusive start of the next one. */
+function startOfNextDay(at) {
+  const date = new Date(at);
+  date.setDate(date.getDate() + 1);
+  return date.getTime();
+}
+
+/** What the token column adds up, so the column and the ordering never disagree. */
+function totalTokens(session) {
+  return session.tokens ? session.tokens.input + session.tokens.output : 0;
 }
 
 /** Thousands separators, in the reader's own locale. */
@@ -709,19 +860,125 @@ function isTyping(target) {
 
 /* ------------------------------------------------------------------ wiring */
 
-function readLimit() {
-  const raw = Number.parseInt(new URLSearchParams(location.search).get('limit') ?? '', 10);
-  return Number.isInteger(raw) && raw > 0 ? Math.min(raw, MAX_LIMIT) : DEFAULT_LIMIT;
+/** Everything about the view that survives a reload, taken from the query string. */
+function readView() {
+  const params = new URLSearchParams(location.search);
+  const limit = Number.parseInt(params.get('limit') ?? '', 10);
+  const range = params.get('range');
+  const sort = params.get('sort');
+
+  return {
+    limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT,
+    // A hand-edited or stale parameter falls back rather than leaving the page in a
+    // state its own controls cannot show.
+    range: range !== null && Object.hasOwn(RANGES, range) ? range : DEFAULT_VIEW.range,
+    from: params.get('from') ?? DEFAULT_VIEW.from,
+    to: params.get('to') ?? DEFAULT_VIEW.to,
+    sort: sort !== null && Object.hasOwn(RECENT_ORDERS, sort) ? sort : DEFAULT_VIEW.sort,
+  };
+}
+
+/**
+ * Mirror the view into the address bar, so a reload — or a bookmark, or a link to a
+ * colleague on the same machine — comes back to the same stretch of history.
+ *
+ * Defaults are dropped rather than spelled out, which keeps a plain visit to
+ * `http://127.0.0.1:3099/` plain. Replace rather than push: paging deeper and
+ * narrowing a range are not places you want the back button to walk through.
+ */
+function syncUrl() {
+  const url = new URL(location.href);
+  const set = (key, value, fallback) => {
+    if (value === fallback) url.searchParams.delete(key);
+    else url.searchParams.set(key, String(value));
+  };
+
+  set('limit', state.limit, DEFAULT_LIMIT);
+  for (const [key, fallback] of Object.entries(DEFAULT_VIEW)) set(key, state[key], fallback);
+  history.replaceState(null, '', url);
 }
 
 function setLimit(limit) {
   state.limit = Math.min(limit, MAX_LIMIT);
-  const url = new URL(location.href);
-  url.searchParams.set('limit', String(state.limit));
-  // Replace rather than push: paging deeper is not a place you want to go back to.
-  history.replaceState(null, '', url);
-  pollSessions();
+  syncUrl();
+  refetchSessions();
 }
+
+const rangeSelect = byId('range');
+const sortSelect = byId('sort');
+const fromInput = byId('range-from');
+const toInput = byId('range-to');
+
+const resetButton = byId('reset');
+
+/** Whether the Recent controls are all still where they started. */
+function isDefaultView() {
+  return Object.entries(DEFAULT_VIEW).every(([key, value]) => state[key] === value);
+}
+
+/**
+ * The parts of the picker that come and go: the two date fields, which belong to
+ * Custom alone, and Reset, which only appears once there is something to undo — a
+ * control that would do nothing is one more thing to read past.
+ */
+function renderFilters() {
+  const custom = state.range === 'custom';
+  const from = byId('from-field');
+  const to = byId('to-field');
+  if (from) from.hidden = !custom;
+  if (to) to.hidden = !custom;
+  if (resetButton) resetButton.hidden = isDefaultView();
+}
+
+/** Push the state back into the controls, for a first paint and for Reset. */
+function syncControls() {
+  if (rangeSelect) rangeSelect.value = state.range;
+  if (sortSelect) sortSelect.value = state.sort;
+  if (fromInput) fromInput.value = state.from;
+  if (toInput) toInput.value = state.to;
+  renderFilters();
+}
+
+/** One control moved: mirror it, redraw the picker around it, and go and ask again. */
+function applyFilters() {
+  renderFilters();
+  syncUrl();
+  // Redraw from what is already here so the table answers the click rather than the
+  // round trip; the fetch is what widens the window past the rows already on screen.
+  render();
+  refetchSessions();
+}
+
+rangeSelect?.addEventListener('change', () => {
+  state.range = rangeSelect.value;
+  applyFilters();
+});
+
+sortSelect?.addEventListener('change', () => {
+  state.sort = sortSelect.value;
+  applyFilters();
+});
+
+for (const [input, key] of [[fromInput, 'from'], [toInput, 'to']]) {
+  input?.addEventListener('change', () => {
+    state[key] = input.value;
+    applyFilters();
+  });
+}
+
+// Only the range and the ordering. The text filter above the tables is its own
+// control, with its own Escape, and it narrows the Active table too — folding it in
+// here would make one button reach outside the panel it sits in. `limit` stays as
+// well: how deep you have paged is not something you set and then have to undo.
+resetButton?.addEventListener('click', () => {
+  Object.assign(state, DEFAULT_VIEW);
+  syncControls();
+  syncUrl();
+  render();
+  refetchSessions();
+  // Reset has just hidden itself, so leave focus somewhere that still exists.
+  rangeSelect?.focus();
+});
 
 const search = byId('search');
 
@@ -830,6 +1087,10 @@ darkMedia.addEventListener('change', () => {
 });
 
 applyTheme(readTheme());
+// The controls follow the state rather than the other way round, so a reload with
+// `?range=7d&sort=tokens-desc` opens with the picker already saying so.
+syncControls();
+
 pollHealth();
 pollSessions();
 setInterval(pollHealth, HEALTH_INTERVAL_MS);

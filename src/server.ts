@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { TrackerConfig } from './config.ts';
-import { SessionRegistry } from './core/registry.ts';
+import { parseSort, SessionRegistry } from './core/registry.ts';
 import { revealInFileManager } from './desktop.ts';
 import { VERSION } from './version.ts';
 
@@ -78,8 +78,18 @@ async function handle(
   }
 
   if (path === '/api/sessions') {
-    const limit = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
-    sendJson(res, 200, await registry.list({ limit: Number.isFinite(limit) ? limit : undefined }));
+    sendJson(
+      res,
+      200,
+      await registry.list({
+        limit: intParam(url, 'limit'),
+        // Epoch milliseconds, so the caller decides what "today" means. The browser
+        // knows its own timezone and the page is the only caller that has to care.
+        since: intParam(url, 'since'),
+        until: intParam(url, 'until'),
+        sort: parseSort(url.searchParams.get('sort')),
+      }),
+    );
     return;
   }
 
@@ -179,6 +189,12 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
     'cache-control': 'no-store',
   });
   res.end(payload);
+}
+
+/** A whole-number parameter, or nothing when it is missing or not a number. */
+function intParam(url: URL, name: string): number | undefined {
+  const value = Number.parseInt(url.searchParams.get(name) ?? '', 10);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 function hostnameOf(header: string | undefined): string {

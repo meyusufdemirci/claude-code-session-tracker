@@ -2,7 +2,7 @@ import { access } from 'node:fs/promises';
 import type { TrackerConfig } from '../../config.ts';
 import { FileCache } from '../../core/cache.ts';
 import type { Session, SessionDetail } from '../../core/types.ts';
-import type { RecentSessions, SessionSource } from '../source.ts';
+import type { RecentQuery, RecentSessions, SessionSource } from '../source.ts';
 import { readDetail } from './detail.ts';
 import { listLiveSessions } from './live.ts';
 import { listRecentSessions } from './transcripts.ts';
@@ -45,10 +45,7 @@ export class ClaudeCodeSource implements SessionSource {
     return listLiveSessions(this.#config);
   }
 
-  async listRecent(options: {
-    limit: number;
-    include?: readonly string[];
-  }): Promise<RecentSessions> {
+  async listRecent(options: RecentQuery): Promise<RecentSessions> {
     return listRecentSessions(this.#config, options, this.#transcripts);
   }
 

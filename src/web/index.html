@@ -106,7 +106,48 @@
       </section>
 
       <section class="panel" id="recent-panel">
-        <h2>Recent <span class="count" id="recent-count"></span></h2>
+        <div class="panel-head">
+          <h2>Recent <span class="count" id="recent-count"></span></h2>
+
+          <div class="filters">
+            <label class="field">
+              <span>Range</span>
+              <select id="range">
+                <option value="all">All time</option>
+                <option value="today">Today</option>
+                <option value="yesterday">Yesterday</option>
+                <option value="3d">Last 3 days</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </label>
+
+            <!-- Revealed only by the Custom option; either end may be left empty. -->
+            <label class="field" id="from-field" hidden>
+              <span>From</span>
+              <input type="date" id="range-from" />
+            </label>
+            <label class="field" id="to-field" hidden>
+              <span>To</span>
+              <input type="date" id="range-to" />
+            </label>
+
+            <label class="field">
+              <span>Sort</span>
+              <select id="sort">
+                <option value="recent">Most recent</option>
+                <option value="tokens-desc">Most tokens</option>
+                <option value="tokens-asc">Fewest tokens</option>
+              </select>
+            </label>
+
+            <!-- Absent until there is something to undo. -->
+            <button type="button" class="reset" id="reset" title="Back to all time, newest first" hidden>
+              Reset
+            </button>
+          </div>
+        </div>
 
         <p class="empty" id="recent-empty">Reading transcripts…</p>
 

@@ -271,6 +271,69 @@ footer { font-size: .75rem; color: var(--ink-faint); border-top: 1px solid var(-
   .badge[data-status="busy"] .badge-dot { animation: none; }
 }
 
+/* The Recent heading and its controls share a line until the screen is too narrow
+   to hold both, at which point the controls wrap underneath. */
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .5rem 1.25rem;
+  margin-bottom: .85rem;
+}
+
+.panel-head h2 { margin: 0; }
+
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .9rem; }
+
+.field { display: inline-flex; align-items: center; gap: .4rem; }
+
+.field > span {
+  font-size: .62rem;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* `color-scheme` on :root is what makes the native menu and the date picker follow
+   the theme, so these only have to match the surface they sit on. */
+.field select,
+.field input {
+  padding: .24rem .4rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: .78rem;
+}
+
+.field select:hover,
+.field input:hover { border-color: var(--accent); color: var(--accent); }
+
+.field select:focus-visible,
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Stands with the fields and matches their height, but reads as an action rather
+   than a value — hence no label beside it, and the same small uppercase mono the
+   theme switcher uses for the other buttons on the page. */
+.reset {
+  padding: .24rem .6rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .64rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.reset:hover { border-color: var(--accent); color: var(--accent); }
+.reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
 /* ------------------------------------------------------------------ panel */
 
 .grid tbody tr[data-id] { cursor: pointer; }

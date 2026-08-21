@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { TrackerConfig } from '../../config.ts';
 import type { FileCache } from '../../core/cache.ts';
 import type { Session, SessionTokenTotals } from '../../core/types.ts';
-import type { RecentSessions } from '../source.ts';
+import type { RecentQuery, RecentSessions, RecentWindow } from '../source.ts';
 import { pathToSlug, projectNameFromPath, resolveSlugPath } from './slug.ts';
 import { scanTokens } from './usage.ts';
 
@@ -28,6 +28,17 @@ const TRANSCRIPT_FILE = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a
 /** Listing everything opens ~800 files; keep the descriptor count polite. */
 const MAX_OPEN_FILES = 24;
 
+/**
+ * How many transcripts a token-ordered window will open.
+ *
+ * Recency comes free from `stat`, so that ordering only ever opens the rows it
+ * shows. Token totals are inside the files, so ranking by them means reading the
+ * whole window first — 871 transcripts in ~1.4 s cold on the development machine,
+ * and free afterwards, because `FileCache` keeps every one of them. This ceiling is
+ * what stops a window nobody narrowed from becoming an unbounded read.
+ */
+const MAX_RANKED = 2_000;
+
 /** Prompts are for recognising a session in a list, not for reading it. */
 const MAX_PROMPT_CHARS = 280;
 
@@ -44,24 +55,33 @@ const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/;
  * Finished sessions, newest first, read from `~/.claude/projects`.
  *
  * Finding the candidates costs one `readdir` per project plus a `stat` per file and
- * reads no contents at all, so the sort by recency is cheap even across a thousand
- * transcripts. Only the top `limit` are opened: their first 16 KB and last 64 KB for
- * the facts a row needs, plus a full streaming pass to total the tokens a row shows.
- * The full pass is the one place the cost scales with a transcript's size rather
- * than its position in the list, but `FileCache` means it only runs once per file
- * version — a live session pays it every poll, a finished one never again.
+ * reads no contents at all, so both the sort by recency and the `since`/`until`
+ * window are settled before a single transcript is opened. Only the chosen ones are
+ * read: their first 16 KB and last 64 KB for the facts a row needs, plus a full
+ * streaming pass to total the tokens a row shows. The full pass is the one place the
+ * cost scales with a transcript's size rather than its position in the list, but
+ * `FileCache` means it only runs once per file version — a live session pays it
+ * every poll, a finished one never again.
+ *
+ * How many get chosen depends on `sort`. Recency is already known, so it opens
+ * exactly `limit` of them; a token order is not, so it opens the whole window and
+ * leaves the ranking to the caller, which is the only place that sees every source.
  */
 export async function listRecentSessions(
   config: TrackerConfig,
-  options: { limit: number; include?: readonly string[] },
+  options: RecentQuery,
   cache: FileCache<Session>,
 ): Promise<RecentSessions> {
   const candidates = await listCandidates(config.projectsDir);
   candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
-  const chosen = candidates.slice(0, Math.max(0, options.limit));
-  // Named sessions are resolved even when they sort below the cut: a live session
-  // that has been idle for a while still deserves its title in the listing.
+  const within = candidates.filter((candidate) => inWindow(candidate.mtimeMs, options));
+  const ranked = options.sort !== undefined && options.sort !== 'recent';
+  const chosen = within.slice(0, ranked ? MAX_RANKED : Math.max(0, options.limit));
+
+  // Named sessions are resolved even when they sort below the cut or fall outside
+  // the window: a live session that has been idle for a while still deserves its
+  // title in the listing, whatever stretch of history is on screen.
   const wanted = new Set(options.include ?? []);
   if (wanted.size > 0) {
     for (const candidate of chosen) wanted.delete(candidate.id);
@@ -74,8 +94,23 @@ export async function listRecentSessions(
 
   return {
     sessions: sessions.filter((session): session is Session => session !== undefined),
-    total: candidates.length,
+    total: within.length,
   };
+}
+
+/**
+ * Whether a transcript's last write falls inside the window.
+ *
+ * `mtimeMs` rather than the last timestamp inside the file, because the window has
+ * to be settled before anything is opened — narrowing a listing must never cost more
+ * than not narrowing it. The two agree to within the time it takes to flush a line,
+ * which only shows at a boundary: a session that stopped just before midnight and
+ * was flushed just after belongs to yesterday and lists under today.
+ */
+function inWindow(mtimeMs: number, { since, until }: RecentWindow): boolean {
+  if (since !== undefined && mtimeMs < since) return false;
+  if (until !== undefined && mtimeMs >= until) return false;
+  return true;
 }
 
 /** A transcript we know the size and age of, but have not opened. */

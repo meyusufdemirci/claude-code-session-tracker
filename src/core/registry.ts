@@ -1,6 +1,6 @@
 import type { TrackerConfig } from '../config.ts';
 import { ClaudeCodeSource } from '../sources/claude-code/index.ts';
-import type { SessionSource } from '../sources/source.ts';
+import type { RecentSort, RecentWindow, SessionSource } from '../sources/source.ts';
 import type { Session, SessionDetail } from './types.ts';
 
 export interface SourceStatus {
@@ -17,9 +17,33 @@ export interface SessionListResult {
   total: number;
 }
 
+/** What one listing asks for, on top of the window and ordering the sources take. */
+export interface SessionListQuery extends RecentWindow {
+  limit?: number;
+  sort?: RecentSort;
+}
+
 const DEFAULT_LIMIT = 50;
 /** A ceiling so one request can never ask us to open an unbounded number of files. */
 const MAX_LIMIT = 2_000;
+
+/** Newest first — what a list of sessions means with no further instruction. */
+const byRecency = (a: Session, b: Session): number => b.lastActiveAt - a.lastActiveAt;
+
+/**
+ * The same total the token column shows — input plus output, cache reads and writes
+ * left out — so the number on screen and the order it is in can never disagree.
+ */
+function totalTokens(session: Session): number {
+  return session.tokens ? session.tokens.input + session.tokens.output : 0;
+}
+
+/** Recency breaks a token tie, so the many sessions that billed nothing hold still. */
+const ORDERS: Record<RecentSort, (a: Session, b: Session) => number> = {
+  recent: byRecency,
+  'tokens-desc': (a, b) => totalTokens(b) - totalTokens(a) || byRecency(a, b),
+  'tokens-asc': (a, b) => totalTokens(a) - totalTokens(b) || byRecency(a, b),
+};
 
 /**
  * Merges every registered source into one list.
@@ -46,8 +70,9 @@ export class SessionRegistry {
     );
   }
 
-  async list(options: { limit?: number } = {}): Promise<SessionListResult> {
+  async list(options: SessionListQuery = {}): Promise<SessionListResult> {
     const limit = clampLimit(options.limit);
+    const sort = options.sort ?? 'recent';
     const sources = await this.statuses();
     const available = this.sources.filter(
       (source) => sources.find((s) => s.id === source.id)?.available,
@@ -65,7 +90,13 @@ export class SessionRegistry {
 
     for (const source of available) {
       const include = running.get(source.id)?.map((session) => session.id);
-      const recent = await source.listRecent({ limit, include });
+      const recent = await source.listRecent({
+        limit,
+        sort,
+        include,
+        since: options.since,
+        until: options.until,
+      });
       total += recent.total;
       for (const session of recent.sessions) merged.set(session.id, session);
     }
@@ -76,21 +107,30 @@ export class SessionRegistry {
       }
     }
 
-    const byRecency = (a: Session, b: Session): number => b.lastActiveAt - a.lastActiveAt;
     const all = [...merged.values()];
-    // Running sessions are the point of the tool, so `limit` never truncates them —
-    // it bounds the history underneath. A session started seconds ago has no
-    // transcript on disk yet, which would otherwise sort it below month-old ones.
+    // Running sessions are the point of the tool, so neither `limit` nor the window
+    // touches them — both bound the history underneath, and both are asked for in
+    // order to read that history, not to lose sight of what is running. A session
+    // started seconds ago has no transcript on disk yet, which would otherwise sort
+    // it below month-old ones, and `sort` is about the same history, so the live
+    // half stays newest-first however the rest is ranked.
     const live = all.filter((session) => session.live).sort(byRecency);
-    const ended = all.filter((session) => !session.live).sort(byRecency);
+    // The sources hand back everything in the window when the ordering needs reading
+    // to settle, so this is the first point that can rank across all of them at once.
+    const ended = all.filter((session) => !session.live).sort(ORDERS[sort]);
 
     return {
       sessions: [...live, ...ended.slice(0, Math.max(0, limit - live.length))],
       sources,
       generatedAt: Date.now(),
-      // A live session almost always has a transcript and is already counted; the
-      // max covers the seconds before its first line is flushed.
-      total: Math.max(total, merged.size),
+      // What the sources counted is the transcripts inside the window. A running
+      // session is listed whatever the window says, so the ones that count did not
+      // already cover — a transcript outside the window, or a session so new it has
+      // yet to flush a first line — are added on top rather than folded in. Counting
+      // them here rather than off the merged map is what keeps the total a property
+      // of the window alone: a token ordering reads far more transcripts than a
+      // limit's worth, and that must not show up as a bigger number.
+      total: total + live.filter((session) => !counted(session, options)).length,
     };
   }
 
@@ -113,6 +153,28 @@ export class SessionRegistry {
     }
     return null;
   }
+}
+
+/**
+ * Whether the sources' own count already covers this session.
+ *
+ * They count transcripts in the window, so a live session is in that count when it
+ * has one and it was last written inside the window. `lastActiveAt` stands in for
+ * the file's mtime here; for a session that is still running the two are the same
+ * moment to within a flush.
+ */
+function counted(session: Session, { since, until }: RecentWindow): boolean {
+  if (session.transcriptPath === undefined) return false;
+  if (since !== undefined && session.lastActiveAt < since) return false;
+  if (until !== undefined && session.lastActiveAt >= until) return false;
+  return true;
+}
+
+/** An unrecognised `sort` is a typo in a query string, not a reason to fail a request. */
+export function parseSort(raw: string | null | undefined): RecentSort {
+  return raw !== null && raw !== undefined && Object.hasOwn(ORDERS, raw)
+    ? (raw as RecentSort)
+    : 'recent';
 }
 
 export function clampLimit(limit: number | undefined): number {
