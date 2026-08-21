@@ -15,6 +15,8 @@ jobs:
     name: Publish to npm
     runs-on: ubuntu-latest
     environment: npm
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -28,10 +30,12 @@ jobs:
       - run: npm install -g npm@latest
 
       - name: Tag must match the version being published
+        id: version
         run: |
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p "require('./package.json').version")"
           test "$tag" = "$pkg" || { echo "tag $tag does not match package.json $pkg"; exit 1; }
+          echo "version=$tag" >> "$GITHUB_OUTPUT"
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
@@ -42,3 +46,13 @@ jobs:
         run: node scripts/smoke.mjs "$(npm pack --silent)" npm
 
       - run: npm publish --provenance --access public
+
+  # Renders the formula against the tarball the job above just published, proves
+  # it installs on a real macOS runner, and only then moves the tap forward.
+  homebrew:
+    name: Homebrew tap
+    needs: publish
+    uses: ./.github/workflows/homebrew.yml
+    with:
+      version: ${{ needs.publish.outputs.version }}
+    secrets: inherit

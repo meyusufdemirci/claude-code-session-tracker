@@ -53,6 +53,7 @@
     "test:watch": "node --test --watch \"test/**/*.test.ts\"",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=\"src/**/*.ts\" --test-coverage-exclude=\"test/**\" \"test/**/*.test.ts\"",
     "smoke": "node scripts/smoke.mjs",
+    "formula": "node scripts/formula.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepublishOnly": "npm run clean && npm run build"
   },

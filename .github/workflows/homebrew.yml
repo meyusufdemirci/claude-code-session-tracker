@@ -1,0 +1,92 @@
+name: Homebrew
+
+# The formula points at a tarball on npm and carries its sha256, so this can only
+# run once `npm publish` has landed — hence a job the release workflow calls
+# rather than one beside it. `workflow_dispatch` is the retry path: publishing to
+# npm cannot be undone, so a release that reaches the registry but not the tap has
+# to be repairable without cutting another version.
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to put in the tap (blank = whatever npm serves as latest)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  TAP: meyusufdemirci/homebrew-tap
+  FORMULA: claude-code-session-tracker
+
+jobs:
+  tap:
+    name: Render, install, push
+    # macOS is the only runner that can prove the formula installs, and proving it
+    # here is the difference between a broken tap and a failed workflow.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: A tap push needs a token that can write to the tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          test -n "$TAP_TOKEN" || {
+            echo "::error::HOMEBREW_TAP_TOKEN is unset. Create a fine-grained PAT with Contents: read and write on $TAP, and add it to this repository's secrets."
+            exit 1
+          }
+
+      - name: Resolve the version
+        id: resolve
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          version="$REQUESTED"
+          [ -n "$version" ] || version="$(npm view "$FORMULA" version)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Tapping $FORMULA@$version"
+
+      # Retries a 404 for a couple of minutes: a version published seconds ago is
+      # not always resolvable yet, and this job runs right behind `npm publish`.
+      - name: Render the formula from the published tarball
+        run: node scripts/formula.mjs --version "${{ steps.resolve.outputs.version }}" --out "rendered/Formula/$FORMULA.rb"
+
+      - name: Install what the formula describes
+        run: |
+          brew tap-new local/check --no-git
+          mkdir -p "$(brew --repository local/check)/Formula"
+          cp "rendered/Formula/$FORMULA.rb" "$(brew --repository local/check)/Formula/"
+          brew install --formula "local/check/$FORMULA"
+          brew test "local/check/$FORMULA"
+          brew audit --strict --formula "local/check/$FORMULA"
+
+      - name: Push the formula to the tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          git clone --depth 1 "https://x-access-token:$TAP_TOKEN@github.com/$TAP.git" tap
+          mkdir -p tap/Formula
+          cp "rendered/Formula/$FORMULA.rb" "tap/Formula/$FORMULA.rb"
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "Formula/$FORMULA.rb"
+          # Re-running the workflow for a version the tap already carries is a
+          # no-op rather than an empty commit or a failure.
+          if git diff --cached --quiet; then
+            echo "The tap already describes $FORMULA@$VERSION."
+            exit 0
+          fi
+          git commit -m "Bump: $FORMULA to $VERSION"
+          git push

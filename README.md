@@ -12,6 +12,12 @@ project, with live status, titles, and token usage.
 npx claude-code-session-tracker
 ```
 
+Or install it for good, if you would rather have it on your `PATH`:
+
+```sh
+brew install meyusufdemirci/tap/claude-code-session-tracker
+```
+
 Then open the printed `http://127.0.0.1:3099`.
 
 Run Claude Code in four terminals and you lose track of which one is waiting on
@@ -52,6 +58,22 @@ bunx     claude-code-session-tracker   # bun
 
 The package has **no runtime dependencies** and no install scripts, so every
 runner behaves the same.
+
+## Or install it
+
+```sh
+brew install meyusufdemirci/tap/claude-code-session-tracker
+claude-code-session-tracker
+```
+
+The formula installs the same npm tarball the commands above download, so the
+two are the same program — it just lives on your `PATH` and updates with
+`brew upgrade` instead of being fetched each time. Homebrew's own `node` comes
+with it, which is why this is the one route that does not need Node already
+installed.
+
+Elsewhere, `npm i -g claude-code-session-tracker` (or the `pnpm add -g` /
+`bun add -g` equivalent) does the same job.
 
 ## Options
 
@@ -252,7 +274,27 @@ Everything that parses a transcript lives in `src/sources/claude-code/`. The
 (Codex, Cursor) would plug into; `src/core/` knows nothing about Claude Code.
 
 Releasing is a tag: `npm version <patch|minor|major>` then `git push --follow-tags`.
-The release workflow re-runs the checks and publishes with npm provenance.
+The release workflow re-runs the checks, publishes with npm provenance, and then
+moves the Homebrew tap forward.
+
+`pnpm formula` prints the Homebrew formula for a published version, rendered from
+the tarball on npm — Homebrew wants a `sha256` of the exact file it will download
+and npm only advertises a sha512, so the tarball is fetched and hashed rather than
+described. Nothing `.rb` is committed here: the rendered formula lives in
+[`meyusufdemirci/homebrew-tap`](https://github.com/meyusufdemirci/homebrew-tap),
+pushed by `.github/workflows/homebrew.yml` once the version is on the registry and
+once `brew install`, `brew test` and `brew audit --strict` have all passed on a
+macOS runner. That workflow also runs on its own from the Actions tab, which is the
+repair path when a release reaches npm but not the tap — an npm publish cannot be
+taken back, so it must not require a second version to fix.
+
+The push needs a `HOMEBREW_TAP_TOKEN` repository secret: a fine-grained PAT with
+**Contents: read and write** on the tap repository, and nothing else.
+
+```sh
+pnpm formula                   # the formula for this package.json's version
+pnpm formula --version latest  # for whatever npm currently serves
+```
 
 Project plan and phase breakdown: [`PLAN.md`](./PLAN.md).
 
