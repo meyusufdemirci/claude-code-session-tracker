@@ -216,17 +216,30 @@ resolves to `null` for an unknown id rather than throwing.
 
 ## Development
 
-Requires Node 22.6+ for the `dev` script (native TypeScript stripping); the
-published package runs on Node 20+.
+Requires Node 22.18+ to run from source, because `dev` and `test` load `.ts`
+files directly and let Node strip the types. The published package is compiled
+JavaScript and runs on Node 20+.
 
 ```sh
 pnpm install
 pnpm dev                       # run from source, watch mode
+pnpm test                      # unit tests
+pnpm test:watch                # re-run on change
+pnpm test:coverage             # unit tests + a coverage report
 pnpm build                     # tsc + copy web assets
-pnpm typecheck
+pnpm typecheck                 # src and test
 npm pack                       # -> claude-code-session-tracker-<version>.tgz
-pnpm smoke ./claude-code-session-tracker-0.1.0.tgz pnpm
+pnpm smoke ./claude-code-session-tracker-<version>.tgz pnpm
 ```
+
+`test/` mirrors `src/` and runs on `node --test` with no runner, no config, and
+no dependency — the same rule the package itself follows. Fixtures are real
+files in a temp directory rather than a mocked `fs`, because what is worth
+testing here are properties of real files: a multi-byte character cut by a chunk
+boundary, a slug only the directory tree can disambiguate, a cache that turns on
+mtime. `test/helpers/records.ts` holds the transcript shapes in one place, so
+the day the `.jsonl` format changes, the failure is a named test rather than a
+silent wrong number.
 
 `pnpm smoke` installs the packed tarball into a temporary directory with the
 package manager you name, then runs the installed binary against a fixture

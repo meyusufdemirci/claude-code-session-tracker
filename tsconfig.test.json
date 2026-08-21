@@ -1,0 +1,13 @@
+{
+  // Type-checks the tests without letting them anywhere near `dist`. The build
+  // config stays scoped to `src/`, so `tsc` cannot emit a test file by accident.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    "inlineSources": false
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}

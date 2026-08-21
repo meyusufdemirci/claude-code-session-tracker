@@ -22,6 +22,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
+      # Node strips the types itself, so the unit tests need no build and no runner.
+      - run: pnpm test
       - run: pnpm build
       - run: npm pack
       # Every job below installs this exact file, so what CI proves is what npm ships.
