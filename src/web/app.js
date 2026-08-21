@@ -103,9 +103,7 @@ async function getJson(path) {
 
 const LIVE_BADGE_LABELS = { pending: 'Connecting', ok: 'Live', bad: 'Offline' };
 
-function setHealthState(tone, message) {
-  document.querySelector('#health .dot')?.setAttribute('data-state', tone);
-  setText('health-text', message);
+function setLiveState(tone) {
   byId('live-badge')?.setAttribute('data-state', tone);
   setText('live-badge-text', LIVE_BADGE_LABELS[tone] ?? tone);
 }
@@ -193,7 +191,7 @@ async function fetchSessions() {
     result = await getJson(`/api/sessions?${sessionsQuery()}`);
   } catch (error) {
     state.failures += 1;
-    setHealthState('bad', `disconnected · ${error.message}`);
+    setLiveState('bad');
     // One miss is a blip — a poll that landed mid-restart, a sleeping laptop. Two
     // in a row means the server is gone, and every number on the page is stale.
     if (state.failures > 1) showBanner(error);
@@ -210,7 +208,7 @@ async function fetchSessions() {
   state.recent = sessions.filter((session) => !session.live);
   state.total = result.total ?? sessions.length;
 
-  setHealthState('ok', `connected · ${state.live.length} running`);
+  setLiveState('ok');
   render();
   // A session that ended while the panel was open should stop claiming it is busy.
   if (state.openId) syncPanelStatus();

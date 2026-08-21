@@ -56,7 +56,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.mono, .eyebrow, .health, dt {
+.mono, .eyebrow, dt {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -80,20 +80,8 @@ body {
 
 h1 { margin: .15rem 0 0; font-size: 1.6rem; letter-spacing: -.01em; font-weight: 600; }
 
-.health {
-  display: inline-flex;
-  align-items: center;
-  gap: .5rem;
-  font-size: .78rem;
-  color: var(--ink-soft);
-}
-
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-faint); flex: none; }
-.dot[data-state="ok"] { background: var(--ok); }
-.dot[data-state="bad"] { background: var(--bad); }
-
-/* Sits ahead of .health in the masthead — a persistent "this page is watching
-   live" cue, distinct from the connection detail text next to it. */
+/* The masthead's only connection indicator: state (Connecting/Live/Offline) in
+   the label, "still polling" in the pulse. */
 .live-badge {
   display: inline-flex;
   align-items: center;
