@@ -5,6 +5,7 @@ import type { TrackerConfig } from '../../config.ts';
 import type { FileCache } from '../../core/cache.ts';
 import type { Session, SessionTokenTotals } from '../../core/types.ts';
 import type { RecentQuery, RecentSessions, RecentWindow } from '../source.ts';
+import { contextWindowFor } from './models.ts';
 import { pathToSlug, projectNameFromPath, resolveSlugPath } from './slug.ts';
 import { scanTokens } from './usage.ts';
 
@@ -251,7 +252,13 @@ async function readSession(candidate: Candidate): Promise<Session | undefined> {
   if (facts.lastPrompt) session.lastPrompt = clip(facts.lastPrompt);
   if (facts.firstPrompt) session.firstPrompt = clip(facts.firstPrompt);
   if (facts.version) session.version = facts.version;
-  if (facts.model) session.model = facts.model;
+  if (facts.model) {
+    session.model = facts.model;
+    // Sent with the row so the browser can say what share of the window a session
+    // burned without shipping a copy of the model table that only drifts from ours.
+    const contextWindow = contextWindowFor(facts.model);
+    if (contextWindow !== undefined) session.contextWindow = contextWindow;
+  }
 
   return session;
 }

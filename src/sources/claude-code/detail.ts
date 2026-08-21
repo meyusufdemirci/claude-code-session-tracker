@@ -12,6 +12,7 @@ import type {
   SessionTokenTotals,
 } from '../../core/types.ts';
 import { readLines } from './lines.ts';
+import { contextWindowFor } from './models.ts';
 import { findCandidate, loadSession, promptText, type Candidate } from './transcripts.ts';
 import { addUsage } from './usage.ts';
 
@@ -31,43 +32,6 @@ const SUBAGENT_FILE = /^agent-.+\.jsonl$/;
 
 /** Claude Code's stand-in on messages it produced itself. Not a model anyone chose. */
 const SYNTHETIC_MODEL = '<synthetic>';
-
-/**
- * Context window by model alias, for the models this tracker has actually seen.
- *
- * Anthropic's Models API is the live source of truth, but a transcript reader has
- * no request to make — it only ever sees the alias a past turn recorded. Missing an
- * entry here means the free-space math is skipped for that turn, not guessed at.
- */
-const CONTEXT_WINDOWS: Record<string, number> = {
-  'claude-fable-5': 1_000_000,
-  'claude-mythos-5': 1_000_000,
-  'claude-mythos-preview': 1_000_000,
-  'claude-opus-5': 1_000_000,
-  'claude-opus-4-8': 1_000_000,
-  'claude-opus-4-7': 1_000_000,
-  'claude-opus-4-6': 1_000_000,
-  'claude-sonnet-5': 1_000_000,
-  'claude-sonnet-4-6': 1_000_000,
-  'claude-haiku-4-5': 200_000,
-  'claude-opus-4-5': 200_000,
-  'claude-opus-4-1': 200_000,
-  'claude-opus-4-0': 200_000,
-  'claude-sonnet-4-5': 200_000,
-  'claude-sonnet-4-0': 200_000,
-  'claude-3-haiku': 200_000,
-  'claude-3-7-sonnet': 200_000,
-  'claude-3-5-haiku': 200_000,
-  'claude-3-opus': 200_000,
-  'claude-3-5-sonnet': 200_000,
-  'claude-3-sonnet': 200_000,
-};
-
-/** Strips a trailing `-YYYYMMDD` snapshot date, so a dated id matches its alias. */
-function contextWindowFor(model: string | undefined): number | undefined {
-  if (!model) return undefined;
-  return CONTEXT_WINDOWS[model] ?? CONTEXT_WINDOWS[model.replace(/-\d{8}$/, '')];
-}
 
 /**
  * Everything about one session, from a full read of its transcript.

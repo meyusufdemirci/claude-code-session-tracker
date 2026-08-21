@@ -44,6 +44,8 @@ export interface Session {
   version?: string;
   /** Model on the most recent assistant turn, e.g. `claude-opus-5`. */
   model?: string;
+  /** That model's context window, when the model is recognized. Absent means unknown, never guessed. */
+  contextWindow?: number;
   transcriptPath?: string;
   sizeBytes?: number;
   tokens?: SessionTokenTotals;

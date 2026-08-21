@@ -16,6 +16,7 @@
   --accent: #d97757;
   --ok: #788c5d;
   --warn: #b8862d;
+  --hot: #c4691f;
   --bad: #c1442e;
   --zebra: #f5f3ec;
 }
@@ -31,6 +32,7 @@
   --accent: #e0876a;
   --ok: #93a878;
   --warn: #d3a256;
+  --hot: #e08a45;
   --bad: #d9614a;
   --zebra: #1a1917;
 }
@@ -487,6 +489,18 @@ body.drawer-open { overflow: hidden; }
 @media (max-width: 34rem) {
   .drawer { width: 100vw; border-left: 0; }
 }
+
+/* ------------------------------------------------------------ usage scale */
+
+/* How much of the model's context window a token total came to: under 10%, then 10,
+   15 and 20 and up. Set on the list's token cell, the panel's total, and each row of
+   Tokens by prompt — so it comes last, after the colours those three set themselves.
+   A total with no recognised model carries no attribute and stays the plain colour
+   rather than being called light. */
+[data-usage="ok"] { color: var(--ok); }
+[data-usage="warn"] { color: var(--warn); }
+[data-usage="hot"] { color: var(--hot); }
+[data-usage="bad"] { color: var(--bad); }
 
 /* --------------------------------------------------------------- controls */
 

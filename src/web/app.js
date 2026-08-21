@@ -309,6 +309,12 @@ function fillShared(set, session) {
   set('.session-title', headline(session), headline(session));
 }
 
+/** The token cell, tinted by how much of the model's context window went into it. */
+function fillTokens(set, session, row) {
+  set('.tokens', formatTokens(session.tokens), tokensTitle(session.tokens, session.contextWindow));
+  markUsage(row.querySelector('.tokens'), session.tokens, session.contextWindow);
+}
+
 const liveTable = createTable({
   body: byId('live-body'),
   wrap: byId('live-wrap'),
@@ -330,7 +336,7 @@ const liveTable = createTable({
     row.querySelector('.badge')?.setAttribute('data-status', session.status);
     set('.waiting-for', session.waitingFor ?? '');
     set('.model', shortModel(session.model));
-    set('.tokens', formatTokens(session.tokens), tokensTitle(session.tokens));
+    fillTokens(set, session, row);
     set('.uptime', formatUptime(session.startedAt));
   },
 });
@@ -350,13 +356,13 @@ const recentTable = createTable({
     <td class="mono model"></td>
     <td class="num when"></td>
     <td class="num tokens"></td>`,
-  fill: (set, session) => {
+  fill: (set, session, row) => {
     fillShared(set, session);
     const sub = session.lastPrompt ?? session.firstPrompt ?? '';
     set('.session-sub', sub, sub);
     set('.model', shortModel(session.model));
     set('.when', formatWhen(session.lastActiveAt), new Date(session.lastActiveAt).toLocaleString());
-    set('.tokens', formatTokens(session.tokens), tokensTitle(session.tokens));
+    fillTokens(set, session, row);
   },
 });
 
@@ -549,11 +555,59 @@ function formatTokens(tokens) {
 }
 
 /** The exact counts the compact cell rounds away, for a reader who hovers. */
-function tokensTitle(tokens) {
+function tokensTitle(tokens, contextWindow) {
   if (!tokens) return undefined;
   const total = tokens.input + tokens.output;
   if (!total) return undefined;
-  return `Input ${formatCount(tokens.input)} · Output ${formatCount(tokens.output)} · Total ${formatCount(total)}`;
+  const counts = `Input ${formatCount(tokens.input)} · Output ${formatCount(tokens.output)} · Total ${formatCount(total)}`;
+  // The colour on the cell is a share of something the cell never names, so the
+  // hover says what it is a share of.
+  const share = shareOfWindow(total, contextWindow);
+  return share ? `${counts} · ${share}` : counts;
+}
+
+/** `27% of the 1M window` — what a colour means, for whoever hovers to ask. */
+function shareOfWindow(total, contextWindow) {
+  if (!contextWindow || !total) return undefined;
+  return `${formatShare(total / contextWindow)} of the ${formatCompactCount(contextWindow)} window`;
+}
+
+/**
+ * Where a token total falls on the four-step usage scale, or `undefined` when there
+ * is nothing to place: no tokens yet, or a model whose window we do not know.
+ *
+ * The share is of the model's context window — so the same 140K reads as heavy on a
+ * 200K model and light on a 1M one. Every token total on the page is ranked by this
+ * one function, whether it is a whole session or a single prompt inside one.
+ */
+function usageLevel(tokens, contextWindow) {
+  const total = tokens ? tokens.input + tokens.output : 0;
+  if (!contextWindow || !total) return undefined;
+
+  const share = total / contextWindow;
+  if (share >= 0.2) return 'bad';
+  if (share >= 0.15) return 'hot';
+  if (share >= 0.1) return 'warn';
+  return 'ok';
+}
+
+/** Tints one element by the share of the window its total came to. */
+function markUsage(node, tokens, contextWindow) {
+  if (!node) return;
+  const level = usageLevel(tokens, contextWindow);
+  if (level) node.setAttribute('data-usage', level);
+  else node.removeAttribute('data-usage');
+}
+
+/**
+ * A share as a whole percent, except near zero, where `0%` would read as none at all.
+ *
+ * Rounded down, not to nearest, so the number stays on the same side of the colour
+ * thresholds as the cell it explains — 19.96% is orange, and must not say `20%`.
+ */
+function formatShare(share) {
+  const percent = share * 100;
+  return percent >= 1 ? `${Math.floor(percent)}%` : `${percent.toFixed(1)}%`;
 }
 
 /** A duration in prose: `2h 14m`, `9m 12s`, `41s`. Unlike uptime this never ticks. */
@@ -687,11 +741,12 @@ function fillPanel(detail) {
 
   setText('d-in', formatCount(detail.tokens.input));
   setText('d-out', formatCount(detail.tokens.output));
+  fillTotal(detail);
   setText('d-cache-read', formatCount(detail.tokens.cacheRead));
   setText('d-cache-create', formatCount(detail.tokens.cacheCreate));
 
   fillContext(detail.context, detail.model);
-  fillPromptUsage(detail.promptUsage);
+  fillPromptUsage(detail.promptUsage, detail.contextWindow);
 
   setText('d-models', detail.models.map(shortModel).join(', ') || shortModel(detail.model) || '—');
   setText('d-started', formatStamp(detail.startedAt));
@@ -702,6 +757,19 @@ function fillPanel(detail) {
   fillPrompt('d-prompt-first-wrap', 'd-prompt-first', detail.firstPrompt);
   fillPrompt('d-prompt-last-wrap', 'd-prompt-last', detail.lastPrompt);
   byId('d-prompts-section').hidden = !detail.firstPrompt && !detail.lastPrompt;
+}
+
+/** The one number the list's token column colours, repeated here with its colour. */
+function fillTotal(detail) {
+  const total = detail.tokens.input + detail.tokens.output;
+  const node = byId('d-total');
+  if (!node) return;
+
+  node.textContent = formatCount(total);
+  markUsage(node, detail.tokens, detail.contextWindow);
+  const share = shareOfWindow(total, detail.contextWindow);
+  if (share) node.title = share;
+  else node.removeAttribute('title');
 }
 
 /**
@@ -739,7 +807,7 @@ function fillContext(context, model) {
 }
 
 /** Already sorted high to low by the server; the panel just lays it out. */
-function fillPromptUsage(promptUsage) {
+function fillPromptUsage(promptUsage, contextWindow) {
   const list = byId('d-prompt-usage');
   const section = byId('d-prompt-usage-section');
   if (!list || !section) return;
@@ -760,7 +828,10 @@ function fillPromptUsage(promptUsage) {
     const tokens = document.createElement('span');
     tokens.className = 'prompt-usage-tokens mono';
     tokens.textContent = formatTokens(entry.tokens);
-    const title = tokensTitle(entry.tokens);
+    // One prompt is measured against the same window as the session it sits in, so a
+    // row that ran the window up shows the colour the whole session would.
+    markUsage(tokens, entry.tokens, contextWindow);
+    const title = tokensTitle(entry.tokens, contextWindow);
     if (title) tokens.title = title;
 
     item.append(text, tokens);
