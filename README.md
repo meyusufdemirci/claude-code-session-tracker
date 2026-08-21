@@ -1,4 +1,4 @@
-# claude-code-session-tracker
+# Claude Code Session Tracker
 
 [![CI](https://github.com/meyusufdemirci/claude-code-session-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/meyusufdemirci/claude-code-session-tracker/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/claude-code-session-tracker)](https://www.npmjs.com/package/claude-code-session-tracker)
@@ -7,6 +7,11 @@
 
 See every Claude Code session on your machine in a local dashboard — grouped by
 project, with live status, titles, and token usage.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/dashboard-dark.png" />
+  <img alt="The dashboard: an Active table with a busy, a waiting and an idle session, above a Recent table spanning six projects with models, last-active times and token totals" src="docs/dashboard-light.png" />
+</picture>
 
 ```sh
 npx claude-code-session-tracker
@@ -39,6 +44,13 @@ else — and puts it on one page.
 - **`--json`** for scripting, and an HTTP API if you would rather build your own.
 - **No dependencies, no install scripts, no network calls, no writes** to your
   Claude directory.
+
+Click a row and the panel opens beside it:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/session-detail-dark.png" />
+  <img alt="The detail panel for a running session: status and summary, token totals, how full the context window is, tokens per prompt, and the session's model, start and working time" src="docs/session-detail-light.png" />
+</picture>
 
 ## Requirements
 
