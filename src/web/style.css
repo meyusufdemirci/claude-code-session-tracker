@@ -465,6 +465,84 @@ body.drawer-open { overflow: hidden; }
 
 .limits-reset { margin: 0; font-size: .78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
+/* The mark that carries the note about a projection, and the note itself. It rides
+   the label it explains, so each card carries its own.
+   A layer of its own because the bars are positioned — the pace overlay needs them
+   to be — and a note wide enough to reach the next card would otherwise open behind
+   that card's bar. One is enough to clear the panel, and ties with the drawer's
+   scrim, which comes later in the document and so stays in front of it. */
+.info { position: relative; z-index: 1; display: inline-flex; margin-left: .3rem; vertical-align: middle; }
+
+/* Sized off the label it sits beside rather than the page: small enough to leave the
+   row's height alone, and quiet enough not to compete with the figure below it. The
+   label's uppercasing and letter-spacing stop here — an `i` wants neither. */
+.info-mark {
+  width: .9rem;
+  height: .9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: .6rem;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: help;
+}
+
+.info-mark:hover, .info-mark:focus-visible { border-color: var(--accent); color: var(--accent); }
+.info-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Centred under the mark, which is what lets the same rule serve both cards: the
+   label sits a third of the way across either one, so a note hung to one side would
+   run off the panel from the right-hand card. The viewport term is what holds it on
+   a narrow screen, where the card is the width of the page.
+   `pointer-events` rather than `visibility` keeps the text in the accessibility tree
+   for the `aria-describedby` above, which is how a reader that never hovers hears it. */
+.info-popover {
+  position: absolute;
+  top: calc(100% + .45rem);
+  left: 50%;
+  width: max-content;
+  max-width: min(19rem, 52vw);
+  padding: .55rem .7rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  box-shadow: 0 4px 18px color-mix(in srgb, var(--ink) 14%, transparent);
+  color: var(--ink-soft);
+  /* Prose, not a label: the monospace face and the tracking it inherits from the
+     `dt` around it belong to the word Projected, not to a sentence. */
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: .72rem;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  opacity: 0;
+  transform: translate(-50%, -.25rem);
+  pointer-events: none;
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+/* Hovering anywhere on the mark opens it; tabbing to the mark does the same, so the
+   note is not something only a pointer can reach. */
+.info:hover .info-popover,
+.info-mark:focus-visible + .info-popover {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .info-popover { transition: none; transform: translate(-50%, 0); }
+}
+
 .limits-bar {
   height: .5rem;
   border-radius: 999px;

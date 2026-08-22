@@ -99,7 +99,20 @@
               <dt>Used</dt><dd data-role="used">—</dd>
             </div>
             <div data-role="pace-row" title="Where this window lands by its reset, if it carries on at the rate it has kept. Tinted against your heaviest window — the same scale the bar uses." hidden>
-              <dt>Projected</dt><dd data-role="pace">—</dd>
+              <dt>Projected
+              <!-- The projection leans on the windows this machine has already closed,
+                   so it firms up as more of them go by. That is a note about the figure
+                   rather than a reading of it, which is why it waits behind a mark
+                   instead of taking a line of the card. The empty `title` keeps the
+                   row's own native tooltip from surfacing over it. -->
+              <span class="info" title="">
+                <button type="button" class="info-mark" aria-label="About this projection" aria-describedby="session-pace-info">i</button>
+                <span class="info-popover" id="session-pace-info" role="tooltip">
+                  The longer you use Claude Code Session Tracker, the smarter it gets — and
+                  the steadier this window's projected figure becomes.
+                </span>
+              </span></dt>
+              <dd data-role="pace">—</dd>
             </div>
           </dl>
 
@@ -121,7 +134,15 @@
               <dt>Used</dt><dd data-role="used">—</dd>
             </div>
             <div data-role="pace-row" title="Where this week lands by its reset, if it carries on at the rate it has kept. Tinted against your heaviest week — the same scale the bar uses." hidden>
-              <dt>Projected</dt><dd data-role="pace">—</dd>
+              <dt>Projected
+              <span class="info" title="">
+                <button type="button" class="info-mark" aria-label="About this projection" aria-describedby="weekly-pace-info">i</button>
+                <span class="info-popover" id="weekly-pace-info" role="tooltip">
+                  The longer you use Claude Code Session Tracker, the smarter it gets — and
+                  the steadier this week's projected figure becomes.
+                </span>
+              </span></dt>
+              <dd data-role="pace">—</dd>
             </div>
           </dl>
 
