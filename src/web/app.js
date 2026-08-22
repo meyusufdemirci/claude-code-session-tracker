@@ -474,15 +474,7 @@ function renderLimitCard(card, limit) {
   setField(card, 'window', current ? windowRange(limit, current) : '');
   setField(card, 'reset', current ? resetLine(limit, current) : '');
 
-  const bar = field(card, 'bar');
-  const fill = field(card, 'fill');
-  if (bar) bar.hidden = share === undefined;
-  if (fill && share !== undefined) {
-    // Past the yardstick the bar simply reads full, and its colour says so — there
-    // is no more room to draw a window that broke the record it is measured against.
-    fill.style.width = `${Math.min(100, share * 100)}%`;
-    fill.setAttribute('data-usage', limitLevel(share));
-  }
+  renderBar(card, share);
 
   const stats = field(card, 'stats');
   if (stats) stats.hidden = !current;
@@ -491,6 +483,35 @@ function renderLimitCard(card, limit) {
   renderPace(card, limit, current);
 
   setField(card, 'note', limitNote(limit, current, share));
+}
+
+/**
+ * The bar, and the same share spelled out at the end of it.
+ *
+ * The figure sits on the bar's own line because it is the bar's own reading — it
+ * adds no claim the card was not already making, and only spares the reader
+ * measuring a width by eye. Both take the colour of the step they land on, so the
+ * two cannot disagree.
+ *
+ * Where they do part company is past the yardstick: the bar has nowhere further to
+ * go and reads full, while the figure keeps counting, since a record broken by half
+ * again is worth saying and a bar pinned at its end can only say `at least`.
+ */
+function renderBar(card, share) {
+  const bar = field(card, 'bar');
+  if (bar) bar.hidden = share === undefined;
+  if (share === undefined) return;
+
+  const level = limitLevel(share);
+
+  const fill = field(card, 'fill');
+  if (fill) {
+    fill.style.width = `${Math.min(100, share * 100)}%`;
+    fill.setAttribute('data-usage', level);
+  }
+
+  setField(card, 'share', formatShare(share));
+  field(card, 'share')?.setAttribute('data-usage', level);
 }
 
 /**

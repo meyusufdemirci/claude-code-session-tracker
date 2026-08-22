@@ -90,8 +90,15 @@
             <p class="limits-reset" data-role="reset"></p>
           </div>
 
-          <div class="limits-bar" data-role="bar" hidden>
-            <span class="limits-bar-fill" data-role="fill"></span>
+          <!-- The share rides the bar rather than the count below it: the two are one
+               reading, and a percentage sitting anywhere else has to be tied back to
+               the bar by the reader. The row carries the role, so a window with
+               nothing to measure against takes the figure away with the bar. -->
+          <div class="limits-bar-row" data-role="bar" hidden>
+            <span class="limits-bar">
+              <span class="limits-bar-fill" data-role="fill"></span>
+            </span>
+            <span class="limits-bar-share" data-role="share"></span>
           </div>
 
           <dl class="stats" data-role="stats" hidden>
@@ -125,8 +132,15 @@
             <p class="limits-reset" data-role="reset"></p>
           </div>
 
-          <div class="limits-bar" data-role="bar" hidden>
-            <span class="limits-bar-fill" data-role="fill"></span>
+          <!-- The share rides the bar rather than the count below it: the two are one
+               reading, and a percentage sitting anywhere else has to be tied back to
+               the bar by the reader. The row carries the role, so a window with
+               nothing to measure against takes the figure away with the bar. -->
+          <div class="limits-bar-row" data-role="bar" hidden>
+            <span class="limits-bar">
+              <span class="limits-bar-fill" data-role="fill"></span>
+            </span>
+            <span class="limits-bar-share" data-role="share"></span>
           </div>
 
           <dl class="stats" data-role="stats" hidden>

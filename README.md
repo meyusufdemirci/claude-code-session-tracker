@@ -192,11 +192,13 @@ transcript is the turn it refused — so both cards at the top of the page are
   stays away until a fifth of the window has gone, since a rate read off the
   first few minutes projects noise, and stays away from a rolling week entirely:
   that one ends at the instant it is measured, leaving nothing to project into.
-- **The share** is against the heaviest window that has already closed — the last
-  7 days for the five-hour card, the last 28 for the weekly one — never the one
-  in progress, since a window is always 100% of itself. It is a yardstick, not a
-  quota. If Claude has actually cut a window short, the note says which one and
-  how big it was, because that is the one point on the scale it drew itself.
+- **The share** — the bar, and the percentage printed at the end of it — is against
+  the heaviest window that has already closed: the last 7 days for the five-hour
+  card, the last 28 for the weekly one, never the one in progress, since a window is
+  always 100% of itself. It is a yardstick, not a quota. Past it the bar reads full,
+  having nowhere further to go, while the percentage keeps counting. If Claude has
+  actually cut a window short, the note says which one and how big it was, because
+  that is the one point on the scale it drew itself.
 
 If nothing has run in a window there is none, and the card says so rather than
 showing an empty bar.

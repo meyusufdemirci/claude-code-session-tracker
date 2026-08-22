@@ -543,12 +543,31 @@ body.drawer-open { overflow: hidden; }
   .info-popover { transition: none; transform: translate(-50%, 0); }
 }
 
+/* The bar and its figure on one line, with the bar taking whatever the figure does
+   not. The row carries the margins the bar used to, so the pair moves as one thing. */
+.limits-bar-row { display: flex; align-items: center; gap: .6rem; margin: .2rem 0 1rem; }
+
 .limits-bar {
+  flex: 1;
+  min-width: 0;
   height: .5rem;
   border-radius: 999px;
   overflow: hidden;
   background: var(--rule);
-  margin: .2rem 0 1rem;
+}
+
+/* Read off the bar it ends, so it takes the bar's colour and the bar's scale. Its
+   width is reserved rather than fitted: three digits, so a window crossing 100%
+   pushes nothing sideways. Tabular figures keep it still as the number ticks. */
+.limits-bar-share {
+  flex: none;
+  min-width: 2.6rem;
+  text-align: right;
+  font-size: .78rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-soft);
 }
 
 .limits-bar-fill {
