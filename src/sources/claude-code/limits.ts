@@ -9,6 +9,7 @@ import type {
   UsageWindow,
 } from '../../core/types.ts';
 import { readLines } from './lines.ts';
+import { readWeeklyReset } from './quota.ts';
 import { addUsage } from './usage.ts';
 
 /** The stretch Claude Code bills against, and calls a session limit. */
@@ -74,11 +75,11 @@ export interface UsageBucket {
   /** A weekly rate-limit rejection was recorded in this half hour. */
   weeklyLimited: boolean;
   /**
-   * The weekly reset Claude reported alongside it.
+   * The all-models weekly reset Claude reported alongside it.
    *
-   * The only thing on disk that says where the weekly clock actually falls. Nothing
-   * else in a transcript hints at it, so without one the week has to be counted back
-   * from now rather than pinned.
+   * The only thing in a transcript that says where the weekly clock actually falls.
+   * A refusal on one model's own weekly clock leaves this unset: it marks the week
+   * as limited without being allowed to place its edges.
    */
   weeklyResetsAt?: number;
 }
@@ -116,6 +117,9 @@ export async function readUsageLimits(
   // than a read — the same trade the session listing makes.
   const files = (await listBilledFiles(config.projectsDir)).filter((file) => file.mtimeMs >= since);
   const perFile = await mapLimit(files, MAX_OPEN_FILES, (file) => loadBuckets(file, cache));
+  // The one date on this machine that says where the weekly clock falls. Read
+  // alongside the transcripts because it answers what they cannot.
+  const weeklyReset = await readWeeklyReset(config.claudeJsonPath);
 
   const merged = new Map<number, UsageBucket>();
   for (const buckets of perFile) {
@@ -131,7 +135,7 @@ export async function readUsageLimits(
 
   return {
     session: measureFiveHour(buckets, now),
-    weekly: measureWeekly(buckets, now),
+    weekly: measureWeekly(buckets, now, weeklyReset),
     generatedAt: now,
   };
 }
@@ -158,18 +162,27 @@ function measureFiveHour(buckets: readonly UsageBucket[], now: number): UsageLim
 }
 
 /**
- * The weekly limit, cut into seven-day blocks.
+ * The weekly limit that covers every model, cut into seven-day blocks.
  *
  * Where those blocks fall is the whole question. A five-hour window can be found in
  * the timestamps — five quiet hours end one — but nobody goes a week without running
  * Claude, so there is no gap to read a week's edge off. Claude's own clock is the
- * only true answer, and it writes it down exactly once: on a weekly refusal. With
- * one of those in history the blocks are pinned to it and stepped forward in sevens;
- * without one they are counted back from now, and `clock` says which happened rather
- * than letting the page imply a reset nobody knows.
+ * only true answer, and it writes that down in two places: the usage readout it
+ * caches in the account file, and a weekly refusal. Either one pins the blocks and
+ * they step forward in sevens from there; with neither they are counted back from
+ * now, and `clock` says which happened rather than letting the page imply a reset
+ * nobody knows.
+ *
+ * The cached readout is preferred because it is unambiguous about *which* weekly bar
+ * it describes. A refusal need not be — Claude bills some models on weekly clocks of
+ * their own — so only the all-models refusals are allowed to place a week.
  */
-function measureWeekly(buckets: readonly UsageBucket[], now: number): UsageLimit {
-  const reported = reportedWeeklyReset(buckets);
+function measureWeekly(
+  buckets: readonly UsageBucket[],
+  now: number,
+  cachedReset?: number,
+): UsageLimit {
+  const reported = cachedReset ?? refusedWeeklyReset(buckets);
   const anchor = reported ?? now;
   const windows = blockWindows(buckets, anchor, reported !== undefined);
   // `now - 1`, not `now`: with no reported reset the anchor *is* now, and the block
@@ -284,13 +297,13 @@ function blockStart(at: number, anchor: number): number {
 }
 
 /**
- * The most recent weekly reset Claude reported, if it ever refused a turn for one.
+ * The most recent all-models weekly reset Claude named on a turn it refused.
  *
  * The most recent rather than the first: the weekly clock can be moved — a plan
  * change, a promo week — and the latest thing Claude said about it is the closest
  * to true today.
  */
-function reportedWeeklyReset(buckets: readonly UsageBucket[]): number | undefined {
+function refusedWeeklyReset(buckets: readonly UsageBucket[]): number | undefined {
   for (let index = buckets.length - 1; index >= 0; index -= 1) {
     const reset = buckets[index]?.weeklyResetsAt;
     if (reset !== undefined) return reset;
@@ -430,7 +443,11 @@ async function scanBuckets(path: string): Promise<UsageBucket[]> {
         if (rejection.resetsAt !== undefined) bucket.fiveHourResetsAt = rejection.resetsAt;
       } else {
         bucket.weeklyLimited = true;
-        if (rejection.resetsAt !== undefined) bucket.weeklyResetsAt = rejection.resetsAt;
+        // A week hit on one model's clock is still a week hit, but its reset belongs
+        // to that model rather than to the bar this limit draws.
+        if (rejection.resetsAt !== undefined && !rejection.scoped) {
+          bucket.weeklyResetsAt = rejection.resetsAt;
+        }
       }
       continue;
     }
@@ -476,15 +493,16 @@ function bucketAt(buckets: Map<number, UsageBucket>, at: number): UsageBucket {
 /**
  * The one thing Claude Code writes down about a limit itself: the turn it refused.
  *
- * `rateLimitType` says which clock ran out, and the two must never be confused —
- * a weekly reset read as a five-hour one would put a window's end days from where
- * it is. Anything under `seven_day` is weekly, including the per-model bars Claude
- * Code names `seven_day_opus` and the like; a type we have never seen is left alone
+ * `rateLimitType` says which clock ran out, and the three must never be confused.
+ * A weekly reset read as a five-hour one would put a window's end days from where it
+ * is. And `seven_day` is not one clock but a family: the bare name is the bar across
+ * every model, while `seven_day_opus` and its siblings are separate weeks on single
+ * models, which is what `scoped` marks. A type we have never seen is left alone
  * rather than guessed at.
  */
 function rejectionIn(
   record: TranscriptRecord,
-): { clock: 'five_hour' | 'weekly'; resetsAt?: number } | undefined {
+): { clock: 'five_hour' | 'weekly'; resetsAt?: number; scoped: boolean } | undefined {
   const quota = obj(record.quotaLimits);
   if (!quota) return undefined;
   if (str(quota['status']) !== 'rejected') return undefined;
@@ -498,9 +516,12 @@ function rejectionIn(
         : undefined;
   if (!clock) return undefined;
 
+  const scoped = clock === 'weekly' && type !== 'seven_day' && type !== 'weekly';
   // Seconds on the wire, milliseconds everywhere in this tool.
   const seconds = num(quota['resetsAt']);
-  return seconds === undefined ? { clock } : { clock, resetsAt: seconds * 1000 };
+  return seconds === undefined
+    ? { clock, scoped }
+    : { clock, resetsAt: seconds * 1000, scoped };
 }
 
 /**

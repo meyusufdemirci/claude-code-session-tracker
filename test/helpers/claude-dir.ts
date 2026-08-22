@@ -26,6 +26,14 @@ export interface ClaudeHome {
   subagent(cwd: string, sessionId: string, name: string, lines: readonly string[]): Promise<string>;
   /** Writes `<sessions>/<pid>.json`, the live registry's record. Returns its path. */
   liveRecord(pid: number, value: unknown): Promise<string>;
+  /**
+   * Writes the account file, where Claude Code caches its own usage readout.
+   *
+   * Given a reset, it holds a `cachedUsageUtilization` block pinning the all-models
+   * weekly clock; given a string, it holds that verbatim, for the tests about a file
+   * that says something else or nothing at all.
+   */
+  accountFile(value: { weeklyResetsAt: number } | string): Promise<string>;
 }
 
 export async function claudeHome(t: TestContext): Promise<ClaudeHome> {
@@ -44,10 +52,31 @@ export async function claudeHome(t: TestContext): Promise<ClaudeHome> {
         `${name}.jsonl`,
         lines,
       ),
+    accountFile: async (value) => {
+      await writeFile(
+        config.claudeJsonPath,
+        typeof value === 'string' ? value : JSON.stringify(utilization(value.weeklyResetsAt)),
+      );
+      return config.claudeJsonPath;
+    },
     liveRecord: async (pid, value) => {
       const path = join(config.sessionsDir, `${pid}.json`);
       await writeFile(path, typeof value === 'string' ? value : JSON.stringify(value));
       return path;
+    },
+  };
+}
+
+/** The shape Claude Code caches its usage readout in, cut down to what is read. */
+function utilization(weeklyResetsAt: number): unknown {
+  return {
+    cachedUsageUtilization: {
+      fetchedAtMs: weeklyResetsAt,
+      utilization: {
+        seven_day: { utilization: 42, resets_at: new Date(weeklyResetsAt).toISOString() },
+        // The per-model weeks sit right beside it, and are not this limit's clock.
+        seven_day_opus: null,
+      },
     },
   };
 }

@@ -40,12 +40,23 @@ describe('createConfig', () => {
     strictEqual(config.projectsDir, join('/opt/claude', 'projects'));
   });
 
-  it('keeps the rollup file in the home directory, not the data directory', () => {
-    // `~/.claude.json` is a sibling of `~/.claude`, and stays there even when the
-    // data directory has been moved elsewhere.
+  it('keeps the account file beside ~/.claude in the default layout', () => {
+    // `~/.claude.json` is a sibling of `~/.claude`, not a child of it.
+    strictEqual(createConfig().claudeJsonPath, join(homedir(), '.claude.json'));
+  });
+
+  it('takes the account file along when the data directory has moved', () => {
+    // `CLAUDE_CONFIG_DIR` moves the whole configuration, account file included —
+    // so a moved directory is read with its own copy, not the default install's.
     const config = createConfig({ claudeDir: '/opt/claude' });
 
-    strictEqual(config.claudeJsonPath, join(homedir(), '.claude.json'));
+    strictEqual(config.claudeJsonPath, join('/opt/claude', '.claude.json'));
+  });
+
+  it('lets the account file be pointed somewhere else outright', () => {
+    const config = createConfig({ claudeJsonPath: '/tmp/account.json' });
+
+    strictEqual(config.claudeJsonPath, '/tmp/account.json');
   });
 
   it('serves loopback on a fixed port unless told otherwise', () => {

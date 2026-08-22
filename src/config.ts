@@ -9,7 +9,7 @@ export interface TrackerConfig {
   sessionsDir: string;
   /** `<claudeDir>/projects` — one folder per project, holding `<sessionId>.jsonl` transcripts. */
   projectsDir: string;
-  /** `~/.claude.json` — per-project rollup metrics. */
+  /** `.claude.json` — per-project rollups, and Claude Code's own cached usage readout. */
   claudeJsonPath: string;
   host: string;
   port: number;
@@ -33,15 +33,29 @@ export function resolveClaudeDir(
 }
 
 export function createConfig(
-  overrides: Partial<Pick<TrackerConfig, 'claudeDir' | 'host' | 'port'>> = {},
+  overrides: Partial<Pick<TrackerConfig, 'claudeDir' | 'claudeJsonPath' | 'host' | 'port'>> = {},
 ): TrackerConfig {
   const claudeDir = overrides.claudeDir ? resolve(overrides.claudeDir) : resolveClaudeDir();
   return {
     claudeDir,
     sessionsDir: join(claudeDir, 'sessions'),
     projectsDir: join(claudeDir, 'projects'),
-    claudeJsonPath: join(homedir(), '.claude.json'),
+    claudeJsonPath: overrides.claudeJsonPath ?? defaultClaudeJsonPath(claudeDir),
     host: overrides.host ?? DEFAULT_HOST,
     port: overrides.port ?? DEFAULT_PORT,
   };
+}
+
+/**
+ * Where the account file sits, given where the data directory does.
+ *
+ * `~/.claude.json` is its home in the default layout — a sibling of `~/.claude`
+ * rather than a child of it. But `CLAUDE_CONFIG_DIR` moves the whole configuration,
+ * account file included, so a data directory that has been moved is read with its
+ * own copy rather than with the one belonging to the default install beside it.
+ */
+function defaultClaudeJsonPath(claudeDir: string): string {
+  return claudeDir === join(homedir(), '.claude')
+    ? join(homedir(), '.claude.json')
+    : join(claudeDir, '.claude.json');
 }

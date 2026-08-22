@@ -478,23 +478,15 @@ function renderLimitCard(card, limit) {
   const fill = field(card, 'fill');
   if (bar) bar.hidden = share === undefined;
   if (fill && share !== undefined) {
-    // Past the yardstick the bar simply reads full. The share beside it keeps
-    // counting, so a record-breaking window is still legible as one.
+    // Past the yardstick the bar simply reads full, and its colour says so — there
+    // is no more room to draw a window that broke the record it is measured against.
     fill.style.width = `${Math.min(100, share * 100)}%`;
     fill.setAttribute('data-usage', limitLevel(share));
   }
 
   const stats = field(card, 'stats');
   if (stats) stats.hidden = !current;
-  const shareRow = field(card, 'share-row');
-  if (shareRow) shareRow.hidden = share === undefined;
-
-  if (current) {
-    setField(card, 'used', formatCompactCount(billedTokens(current.tokens)));
-    setField(card, 'share', share === undefined ? '—' : formatShare(share));
-    setField(card, 'turns', formatCount(current.turns));
-    setField(card, 'cache', formatCompactCount(current.tokens.cacheRead));
-  }
+  if (current) setField(card, 'used', formatCompactCount(billedTokens(current.tokens)));
 
   setField(card, 'note', limitNote(limit, current, share));
 }
@@ -535,7 +527,8 @@ function windowRange(limit, current) {
 
 /** When it empties and how long that is — or, for a rolling week, that it does not. */
 function resetLine(limit, current) {
-  if (limit.clock === 'rolling') return 'Rolling · seven days to now';
+  // A rolling week ends at the instant it was measured, so there is no reset to name.
+  if (limit.clock === 'rolling') return 'Rolling seven days · no reset reported';
   const when = limit.windowMs > DAY_MS ? formatDayClock(current.resetsAt) : formatClock(current.resetsAt);
   return `Resets ${when} · ${formatClockSpan(current.resetsAt - Date.now())} left`;
 }
@@ -569,38 +562,31 @@ function limitLevel(share) {
   return 'ok';
 }
 
-/** What this bar is a share of, in words — including when it is a share of nothing. */
+/**
+ * One line saying what the bar is a share of.
+ *
+ * The real ceiling is enforced server-side and never written to disk, so the only
+ * honest denominator is the heaviest window this machine has already put through —
+ * which the reader has to be told, or the percentage reads as a quota it is not.
+ * Everything past that sentence is detail the card is better off without.
+ */
 function limitNote(limit, current, share) {
   const week = limit.windowMs > DAY_MS;
+  const span = week ? 'week' : 'five-hour window';
+  // Only worth saying when it is true: an anchored week names its own reset above.
+  const guess = week && limit.clock === 'rolling' ? ' No reset reported, so it is counted back from now.' : '';
 
   if (!current) {
-    return week
-      ? 'Nothing billed in the last seven days. The next prompt opens a week.'
-      : 'No window open — nothing has been billed in the last five hours. The next prompt starts one.';
+    return week ? 'Nothing billed this week.' : 'No window open — the next prompt starts one.';
   }
-
-  // How the window's edges were found, which is the part a reader cannot check.
-  const measured =
-    limit.clock === 'rolling'
-      ? 'Claude resets the week on a clock it keeps to itself and never writes down, so this counts the seven days behind you rather than guessing where your week begins.'
-      : limit.clock === 'reported'
-        ? 'These edges are Claude’s own: it named this reset on a turn it refused, and every week is stepped from there.'
-        : 'Claude enforces the real ceiling itself and never writes it to disk, so this is measured from the transcripts rather than read off it.';
-
   if (share === undefined) {
-    const span = week ? 'week' : 'window';
-    return `Nothing to measure against yet — no earlier ${span} in the last ${limit.historyDays} days billed anything. ${measured}`;
+    return `No earlier ${span} in ${limit.historyDays} days to measure against.${guess}`;
   }
 
-  const span = week ? 'seven days' : 'five-hour window';
-  // A week is read from the day it opened; a five-hour window happened on one.
-  const heaviest = `${formatCompactCount(billedTokens(limit.reference.tokens))} ${week ? 'from' : 'on'} ${formatDay(limit.reference.startedAt)}`;
-  // A window Claude actually refused is the one hard point on the scale, and it is
-  // rarely the heaviest — the ceiling is weighted by model, not counted in tokens.
-  const cut = limit.lastLimited
-    ? ` It last cut one short on ${formatDay(limit.lastLimited.startedAt)}, at ${formatCompactCount(billedTokens(limit.lastLimited.tokens))}.`
-    : '';
-  return `Against the heaviest ${span} of your last ${limit.historyDays} days — ${heaviest}.${cut} ${measured}`;
+  const heaviest = formatCompactCount(billedTokens(limit.reference.tokens));
+  // The weekly bar Claude bills every model against, not one model's own week.
+  const scope = week ? 'Every model, against' : 'Against';
+  return `${scope} your heaviest ${span} in ${limit.historyDays} days — ${heaviest}.${guess}`;
 }
 
 /* --------------------------------------------------------------- filtering */

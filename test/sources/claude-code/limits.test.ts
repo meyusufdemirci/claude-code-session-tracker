@@ -358,7 +358,7 @@ describe('readUsageLimits, the weekly limit', () => {
     await home.transcript(CWD, sessionId(1), [
       rejectionRecord({
         timestamp: isoAt(reset - DAY_MS),
-        rateLimitType: 'seven_day_opus',
+        rateLimitType: 'seven_day',
         resetsAt: reset / 1000,
       }),
       turn(1, DAY_MS, 10),
@@ -419,6 +419,103 @@ describe('readUsageLimits, the weekly limit', () => {
     strictEqual(limits.session.historyDays, 7);
     // Same turn, four weeks of history: the week is allowed to see it.
     strictEqual(limits.weekly.reference?.tokens.output, 900);
+  });
+
+  it('leaves one model’s week to that model, marking the limit without placing it', async (t) => {
+    // `seven_day_opus` is a week of its own, running on its own clock. It says a
+    // weekly ceiling was hit — but reading its reset as *the* weekly reset would put
+    // the all-models week days from where it belongs.
+    const home = await claudeHome(t);
+    const reset = NOW + 2 * DAY_MS;
+    await home.transcript(CWD, sessionId(1), [
+      turn(1, 60 * 60 * 1000, 10),
+      rejectionRecord({
+        timestamp: isoAt(NOW - 30 * 60 * 1000),
+        rateLimitType: 'seven_day_opus',
+        resetsAt: reset / 1000,
+      }),
+    ]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.weekly.clock, 'rolling');
+    strictEqual(limits.weekly.current?.startedAt, NOW - WEEK_MS);
+    strictEqual(limits.weekly.current?.limited, true);
+  });
+
+  it('pins the weeks to the reset Claude Code cached in the account file', async (t) => {
+    // The only date on the machine that says where the all-models week falls without
+    // Claude having had to refuse a turn first.
+    const home = await claudeHome(t);
+    const reset = NOW + 3 * DAY_MS;
+    await home.accountFile({ weeklyResetsAt: reset });
+    await home.transcript(CWD, sessionId(1), [turn(1, DAY_MS, 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.weekly.clock, 'reported');
+    strictEqual(limits.weekly.current?.startedAt, reset - WEEK_MS);
+    strictEqual(limits.weekly.current?.resetsAt, reset);
+    strictEqual(limits.weekly.current?.resetsAtIsReported, true);
+    strictEqual(limits.weekly.current?.tokens.output, 10);
+  });
+
+  it('steps a cached reset that has already passed forward to the week in progress', async (t) => {
+    // The readout is refreshed only when something asks the server, so the reset it
+    // names is usually behind. Weeks are exactly seven days apart, which is what
+    // makes an old one still true.
+    const home = await claudeHome(t);
+    const reset = NOW - 10 * DAY_MS;
+    await home.accountFile({ weeklyResetsAt: reset });
+    await home.transcript(CWD, sessionId(1), [turn(1, DAY_MS, 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.weekly.clock, 'reported');
+    strictEqual(limits.weekly.current?.startedAt, reset + WEEK_MS);
+    strictEqual(limits.weekly.current?.resetsAt, reset + 2 * WEEK_MS);
+  });
+
+  it('prefers the cached reset to one read off a refusal', async (t) => {
+    // Both are Claude's own, and they can only disagree by whole weeks — but the
+    // readout is unambiguous about which bar it describes, and a refusal is not.
+    const home = await claudeHome(t);
+    const cached = NOW + DAY_MS;
+    await home.accountFile({ weeklyResetsAt: cached });
+    await home.transcript(CWD, sessionId(1), [
+      rejectionRecord({
+        timestamp: isoAt(NOW - DAY_MS),
+        rateLimitType: 'seven_day',
+        resetsAt: (NOW + 3 * DAY_MS) / 1000,
+      }),
+      turn(1, 2 * DAY_MS, 10),
+    ]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.weekly.current?.resetsAt, cached);
+  });
+
+  it('falls back to counting from now when the account file says nothing', async (t) => {
+    const home = await claudeHome(t);
+    await home.accountFile('{"cachedUsageUtilization":{"utilization":{"seven_day":null}}}');
+    await home.transcript(CWD, sessionId(1), [turn(1, DAY_MS, 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.weekly.clock, 'rolling');
+    strictEqual(limits.weekly.current?.startedAt, NOW - WEEK_MS);
+  });
+
+  it('reads past an account file it cannot parse', async (t) => {
+    const home = await claudeHome(t);
+    await home.accountFile('{ not json');
+    await home.transcript(CWD, sessionId(1), [turn(1, DAY_MS, 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.weekly.clock, 'rolling');
+    strictEqual(limits.weekly.current?.tokens.output, 10);
   });
 
   it('reports no week at all when nothing has been billed in one', async (t) => {
