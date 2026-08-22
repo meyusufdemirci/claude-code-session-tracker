@@ -155,6 +155,44 @@ export function commandRecord(name: string, args?: string, options: UserOptions 
   return userRecord(body, options);
 }
 
+export interface RejectionOptions extends CommonFields {
+  /** `five_hour` or `weekly`. A weekly refusal runs on a different clock entirely. */
+  rateLimitType?: string;
+  /** Epoch *seconds*, which is how Claude Code writes it. */
+  resetsAt?: number;
+}
+
+/**
+ * The turn Claude refused.
+ *
+ * Written as a synthetic assistant message carrying a `quotaLimits` block — the only
+ * thing on disk that names the rate limit itself, since the quota is enforced
+ * server-side and never written down.
+ */
+export function rejectionRecord(options: RejectionOptions = {}): string {
+  const { rateLimitType = 'five_hour', resetsAt } = options;
+  return record({
+    type: 'assistant',
+    ...common(options),
+    quotaLimits: {
+      status: 'rejected',
+      rateLimitType,
+      ...(resetsAt !== undefined ? { resetsAt } : {}),
+      isUsingOverage: false,
+    },
+    error: 'rate_limit',
+    isApiErrorMessage: true,
+    apiErrorStatus: 429,
+    message: {
+      id: 'msg_rejected',
+      role: 'assistant',
+      model: '<synthetic>',
+      content: [{ type: 'text', text: "You've hit your session limit" }],
+      usage: usageKeys({}),
+    },
+  });
+}
+
 /** Any other record type, spelled out where a test needs one. */
 export function record(value: Record<string, unknown>): string {
   return JSON.stringify(value);

@@ -93,6 +93,16 @@ async function handle(
     return;
   }
 
+  if (path === '/api/limits') {
+    const limits = await registry.limits();
+    if (!limits) {
+      sendJson(res, 404, { error: 'No source can measure a rate-limit window' });
+      return;
+    }
+    sendJson(res, 200, limits);
+    return;
+  }
+
   const detailMatch = /^\/api\/sessions\/([\w-]+)$/.exec(path);
   if (detailMatch?.[1]) {
     const detail = await registry.detail(detailMatch[1]);

@@ -1,7 +1,7 @@
 import type { TrackerConfig } from '../config.ts';
 import { ClaudeCodeSource } from '../sources/claude-code/index.ts';
 import type { RecentSort, RecentWindow, SessionSource } from '../sources/source.ts';
-import type { Session, SessionDetail } from './types.ts';
+import type { Session, SessionDetail, UsageLimits } from './types.ts';
 
 export interface SourceStatus {
   id: string;
@@ -132,6 +132,23 @@ export class SessionRegistry {
       // limit's worth, and that must not show up as a bigger number.
       total: total + live.filter((session) => !counted(session, options)).length,
     };
+  }
+
+  /**
+   * Usage against the rate-limit window, from the first source that can measure it.
+   *
+   * Not merged across sources, unlike the listings. A limit belongs to whoever bills
+   * the requests, so two sources reporting one would be two different limits — adding
+   * them would describe neither. The first available source that implements it owns
+   * the answer; `null` means nobody does.
+   */
+  async limits(): Promise<UsageLimits | null> {
+    for (const source of this.sources) {
+      if (!source.limits) continue;
+      if (!(await source.isAvailable())) continue;
+      return source.limits();
+    }
+    return null;
   }
 
   /**

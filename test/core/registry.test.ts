@@ -2,7 +2,7 @@ import { deepStrictEqual, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createConfig } from '../../src/config.ts';
 import { clampLimit, parseSort, SessionRegistry } from '../../src/core/registry.ts';
-import type { SessionDetail } from '../../src/core/types.ts';
+import type { SessionDetail, UsageLimits } from '../../src/core/types.ts';
 import { endedSession, FakeSource, liveSession } from '../helpers/fake-source.ts';
 
 const config = createConfig({ claudeDir: '/nowhere' });
@@ -12,6 +12,16 @@ function registryOf(...sources: FakeSource[]): SessionRegistry {
 }
 
 const tokens = (input: number, output = 0) => ({ input, output, cacheRead: 0, cacheCreate: 0 });
+
+const usageWindow = {
+  startedAt: 1_000,
+  resetsAt: 19_000,
+  resetsAtIsReported: false,
+  tokens: { input: 1, output: 2, cacheRead: 3, cacheCreate: 4 },
+  turns: 1,
+  limited: false,
+};
+
 
 describe('SessionRegistry.list', () => {
   it('lets the running process win over the transcript for the same session', async () => {
@@ -196,6 +206,35 @@ describe('SessionRegistry.detail', () => {
     const missing = new FakeSource({ available: false, details: { a: detail } });
 
     strictEqual(await registryOf(missing).detail('a'), null);
+  });
+});
+
+describe('SessionRegistry.limits', () => {
+  const limits: UsageLimits = {
+    current: usageWindow,
+    historyDays: 7,
+    generatedAt: 2_000,
+  };
+
+  it('answers from the first source that can measure a window', async () => {
+    const cannot = new FakeSource({ id: 'cannot' });
+    const can = new FakeSource({ id: 'can', limits });
+
+    deepStrictEqual(await registryOf(cannot, can).limits(), limits);
+  });
+
+  it('skips a source that is not available', async () => {
+    // Present but with nothing on disk to read: its answer would be an empty window,
+    // which is a different claim from "this machine has no window open".
+    const absent = new FakeSource({ id: 'absent', available: false, limits });
+
+    strictEqual(await registryOf(absent).limits(), null);
+  });
+
+  it('says nobody can when no source implements it', async () => {
+    // `limits` is optional on the seam, and a source without one is not broken —
+    // the page just leaves the strip off.
+    strictEqual(await registryOf(new FakeSource()).limits(), null);
   });
 });
 

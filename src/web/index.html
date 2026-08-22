@@ -78,6 +78,30 @@
         <p class="hint">This page keeps checking, so it will fill in on its own.</p>
       </section>
 
+      <!-- Usage against Claude Code's five-hour session limit. Hidden until the first
+           reading arrives, so a page that cannot measure one simply does not show it. -->
+      <section class="panel limits" id="limits-panel" hidden>
+        <div class="panel-head">
+          <h2>Session limit <span class="count" id="limits-window"></span></h2>
+          <p class="limits-reset" id="limits-reset"></p>
+        </div>
+
+        <div class="limits-bar" id="limits-bar" hidden>
+          <span class="limits-bar-fill" id="limits-bar-fill"></span>
+        </div>
+
+        <dl class="stats" id="limits-stats" hidden>
+          <div title="Input, output and newly-cached tokens billed inside this five-hour window. Cache reads are counted apart — they cost a fraction as much and outweigh the rest fifty to one.">
+            <dt>Used</dt><dd id="limits-used">—</dd>
+          </div>
+          <div id="limits-share-row"><dt>Of heaviest</dt><dd id="limits-share">—</dd></div>
+          <div><dt>Turns</dt><dd id="limits-turns">—</dd></div>
+          <div><dt>Cache read</dt><dd id="limits-cache">—</dd></div>
+        </dl>
+
+        <p class="limits-note" id="limits-note"></p>
+      </section>
+
       <section class="panel" id="live-panel">
         <h2>Active <span class="count" id="live-count"></span></h2>
 

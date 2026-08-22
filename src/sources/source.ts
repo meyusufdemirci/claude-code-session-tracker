@@ -1,4 +1,4 @@
-import type { Session, SessionDetail } from '../core/types.ts';
+import type { Session, SessionDetail, UsageLimits } from '../core/types.ts';
 
 export interface RecentSessions {
   sessions: Session[];
@@ -57,4 +57,14 @@ export interface SessionSource {
 
   /** Full stats for one session. Expensive, so only ever called on demand. */
   detail(id: string): Promise<SessionDetail | null>;
+
+  /**
+   * Usage against this CLI's own rate-limit window.
+   *
+   * Optional, unlike the four above: a limit is a property of whoever bills the
+   * requests, and another CLI may not have one, may not leave enough on disk to
+   * measure it, or may simply be able to ask its own server. A source that does
+   * not implement this is not broken — the page just leaves the strip off.
+   */
+  limits?(): Promise<UsageLimits>;
 }

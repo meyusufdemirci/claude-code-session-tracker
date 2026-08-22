@@ -16,6 +16,14 @@ export interface ClaudeHome {
   config: TrackerConfig;
   /** Writes `<projects>/<slug for cwd>/<id>.jsonl`. Returns its path. */
   transcript(cwd: string, id: string, lines: readonly string[]): Promise<string>;
+  /**
+   * Writes `<projects>/<slug>/<sessionId>/subagents/<name>.jsonl`.
+   *
+   * Not a session — nothing lists these — but their turns are billed to the same
+   * window as the session that spawned them, so anything counting tokens has to
+   * find them.
+   */
+  subagent(cwd: string, sessionId: string, name: string, lines: readonly string[]): Promise<string>;
   /** Writes `<sessions>/<pid>.json`, the live registry's record. Returns its path. */
   liveRecord(pid: number, value: unknown): Promise<string>;
 }
@@ -30,6 +38,12 @@ export async function claudeHome(t: TestContext): Promise<ClaudeHome> {
     config,
     transcript: (cwd, id, lines) =>
       writeTranscript(join(config.projectsDir, pathToSlug(cwd)), `${id}.jsonl`, lines),
+    subagent: (cwd, sessionId, name, lines) =>
+      writeTranscript(
+        join(config.projectsDir, pathToSlug(cwd), sessionId, 'subagents'),
+        `${name}.jsonl`,
+        lines,
+      ),
     liveRecord: async (pid, value) => {
       const path = join(config.sessionsDir, `${pid}.json`);
       await writeFile(path, typeof value === 'string' ? value : JSON.stringify(value));

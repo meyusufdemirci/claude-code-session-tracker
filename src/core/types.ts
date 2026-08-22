@@ -122,3 +122,52 @@ export interface SessionDetail extends Session {
   /** Absent only when the transcript has no assistant turns to measure. */
   context?: SessionContextDetail;
 }
+
+/**
+ * One five-hour usage window — what Claude Code calls a session limit.
+ *
+ * The quota itself is enforced server-side and never written to disk. The only
+ * trace it leaves in a transcript is a rejection record on the turn that got cut
+ * off, so everything here is measured rather than read: the window's bounds from
+ * the turn timestamps, its size from the `usage` totals those turns carry.
+ */
+export interface UsageWindow {
+  /** The window's first billed turn, floored to the half hour — where Claude puts it. */
+  startedAt: number;
+  /** The moment the window empties. From Claude itself when it told us, else `startedAt` plus five hours. */
+  resetsAt: number;
+  /** True when that reset time is Claude's own, taken off a rejection record rather than derived. */
+  resetsAtIsReported: boolean;
+  tokens: SessionTokenTotals;
+  /** Assistant turns billed inside the window — turns, not records. */
+  turns: number;
+  /** Claude Code recorded a five-hour rate-limit rejection inside this window. */
+  limited: boolean;
+}
+
+/** Usage against the five-hour limit: the window in progress, and a yardstick for it. */
+export interface UsageLimits {
+  /** The window the clock is inside. Absent when nothing has run for five hours. */
+  current?: UsageWindow;
+  /**
+   * The heaviest window that has already closed.
+   *
+   * The real ceiling is never written anywhere we can read, so the honest
+   * denominator is the most this machine has already pushed through one window.
+   * When that window is `limited`, it is not just a high-water mark — it is a
+   * point where Claude actually said no.
+   */
+  reference?: UsageWindow;
+  /**
+   * The most recent window Claude actually cut short, when there is one in history.
+   *
+   * Worth reporting on its own rather than folding into `reference`, which is the
+   * heaviest window and may well be a heavier one that was never refused — the
+   * ceiling is weighted by model, not counted in tokens. This is the only number
+   * on either side of the seam that Claude itself put a stop to.
+   */
+  lastLimited?: UsageWindow;
+  /** How many days back `reference` looked. */
+  historyDays: number;
+  generatedAt: number;
+}

@@ -1,9 +1,10 @@
 import { access } from 'node:fs/promises';
 import type { TrackerConfig } from '../../config.ts';
 import { FileCache } from '../../core/cache.ts';
-import type { Session, SessionDetail } from '../../core/types.ts';
+import type { Session, SessionDetail, UsageLimits } from '../../core/types.ts';
 import type { RecentQuery, RecentSessions, SessionSource } from '../source.ts';
 import { readDetail } from './detail.ts';
+import { readUsageLimits, type UsageBucket } from './limits.ts';
 import { listLiveSessions } from './live.ts';
 import { listRecentSessions } from './transcripts.ts';
 
@@ -27,6 +28,14 @@ export class ClaudeCodeSource implements SessionSource {
    * morning's browsing resident.
    */
   readonly #details = new FileCache<SessionDetail>(64);
+  /**
+   * Half-hour usage buckets, one entry per transcript.
+   *
+   * Separate from `#transcripts` because it answers a different question about the
+   * same files — when the tokens were billed, not how many in total — and because it
+   * covers subagent transcripts too, which are not sessions and so never appear there.
+   */
+  readonly #buckets = new FileCache<UsageBucket[]>();
 
   constructor(config: TrackerConfig) {
     this.#config = config;
@@ -51,5 +60,9 @@ export class ClaudeCodeSource implements SessionSource {
 
   async detail(id: string): Promise<SessionDetail | null> {
     return readDetail(this.#config, id, this.#transcripts, this.#details);
+  }
+
+  async limits(): Promise<UsageLimits> {
+    return readUsageLimits(this.#config, this.#buckets);
   }
 }

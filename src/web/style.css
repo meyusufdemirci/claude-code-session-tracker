@@ -426,6 +426,42 @@ body.drawer-open { overflow: hidden; }
 .stats > div { display: flex; flex-direction: column; gap: .1rem; }
 .stats dd { font-size: 1.05rem; font-variant-numeric: tabular-nums; font-weight: 600; }
 
+/* The session-limit strip. The bar carries the same four-step usage colouring as
+   the token cells, so a glance across the page reads on one scale. */
+.limits .panel-head { align-items: baseline; }
+
+/* The drawer's stats sit in a narrow column and want the width; these have the whole
+   page and would drift apart across it, so they cluster left at a readable pitch. */
+.limits .stats {
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 9rem));
+  justify-content: start;
+  gap: .8rem 3rem;
+}
+
+.limits-reset { margin: 0; font-size: .78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+
+.limits-bar {
+  height: .5rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--rule);
+  margin: .2rem 0 1rem;
+}
+
+.limits-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  /* Poll to poll the width moves by a hair; easing it stops that reading as a flicker. */
+  transition: width .4s ease;
+}
+.limits-bar-fill[data-usage="ok"] { background: var(--ok); }
+.limits-bar-fill[data-usage="warn"] { background: var(--warn); }
+.limits-bar-fill[data-usage="hot"] { background: var(--hot); }
+.limits-bar-fill[data-usage="bad"] { background: var(--bad); }
+
+.limits-note { margin: 1rem 0 0; font-size: .78rem; color: var(--ink-faint); max-width: 68ch; }
+
 /* Static and conversation stacked left to right; whatever's left of `windowTokens`
    is just the bar's own background showing through — no third segment to keep in sync. */
 .context-bar {

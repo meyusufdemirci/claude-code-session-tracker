@@ -1,7 +1,7 @@
 import { ok, rejects, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createConfig } from '../src/config.ts';
-import type { SessionDetail } from '../src/core/types.ts';
+import type { SessionDetail, UsageLimits } from '../src/core/types.ts';
 import { createServer, listen } from '../src/server.ts';
 import { SessionRegistry } from '../src/core/registry.ts';
 import { endedSession, FakeSource, liveSession } from './helpers/fake-source.ts';
@@ -127,6 +127,39 @@ describe('GET /api/sessions/:id', () => {
     const server = await startServer(t, [source()]);
 
     strictEqual((await server.fetch('/api/sessions', { method: 'DELETE' })).status, 405);
+  });
+});
+
+describe('GET /api/limits', () => {
+  const limits: UsageLimits = {
+    current: {
+      startedAt: 1_000,
+      resetsAt: 19_000,
+      resetsAtIsReported: false,
+      tokens: { input: 1, output: 2, cacheRead: 3, cacheCreate: 4 },
+      turns: 1,
+      limited: false,
+    },
+    historyDays: 7,
+    generatedAt: 2_000,
+  };
+
+  it('returns the window the source measured', async (t) => {
+    const server = await startServer(t, [new FakeSource({ limits })]);
+
+    const res = await server.fetch('/api/limits');
+
+    strictEqual(res.status, 200);
+    strictEqual((res.json() as UsageLimits).current?.resetsAt, 19_000);
+  });
+
+  it('404s when no source can measure one', async (t) => {
+    // Not an error the page should shout about — it just does not draw the strip.
+    const server = await startServer(t, [source()]);
+
+    const res = await server.fetch('/api/limits');
+
+    strictEqual(res.status, 404);
   });
 });
 

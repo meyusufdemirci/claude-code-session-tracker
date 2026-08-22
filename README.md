@@ -32,6 +32,9 @@ else — and puts it on one page.
 
 ## What you get
 
+- **Your session limit**, at the top: how much of the current five-hour window
+  you have spent, when it resets, and how that compares with the heaviest window
+  of your last week.
 - **Active sessions**, checked twice against the OS so a stale file or a
   recycled PID never shows up as running.
 - **Recent sessions** across every project, with Claude's own title, the first
@@ -148,12 +151,39 @@ can do with `curl`:
 | `GET /api/sessions?since=&until=` | The same list, narrowed to transcripts last written in that window. Epoch milliseconds; `since` is inclusive, `until` exclusive; either may be left off. Running sessions ignore it |
 | `GET /api/sessions?sort=` | `recent` (the default), `tokens-desc`, or `tokens-asc`. Ranks the finished sessions across the whole window, not just the page. An unknown value falls back to `recent` |
 | `GET /api/sessions/:id` | One session with `counts`, `tokens`, `models`, `activeMs`, `awaySummary`, and `notes` |
+| `GET /api/limits` | The five-hour usage window: `current`, the heaviest closed one as `reference`, and `lastLimited` if Claude ever cut one short. 404 when no source can measure one |
 | `GET /api/health` | `ok`, the version, the Node it runs on, the resolved Claude directory, and per-source status |
 | `POST /api/sessions/:id/reveal` | Shows that transcript in your file manager. Requires a loopback `Origin` |
 
 Every route refuses a request whose `Host` is not loopback. `reveal` is the only
 one that acts rather than reports, so it is a POST, it checks `Origin` as well,
 and the path it opens comes from our own lookup — never from the request.
+
+## The session limit
+
+Claude Code bills against a rolling five-hour window. The quota itself is
+enforced server-side and never written to disk — the only trace it leaves in a
+transcript is the turn it refused — so the strip at the top of the page is
+**measured, not read**:
+
+- **The window** is chained from the turn timestamps. It opens on your first
+  billed turn after the last one emptied and runs five hours from there, floored
+  to the half hour, which is where Claude puts it: on the one refusal this was
+  calibrated against, a first turn at 08:37 reset at 13:30. When Claude *has*
+  refused a turn, its own `resetsAt` is used instead of ours.
+- **Used** is input, output and newly-cached tokens across every project — and
+  every subagent, whose turns bill to the window that spawned them. Cache reads
+  are shown apart: they cost a fraction as much and outweigh the rest roughly
+  fifty to one, so folding them in would produce a number that tracks how long
+  your conversations are rather than how much work you asked for.
+- **The share** is against the heaviest window that has already closed in the
+  last 7 days, never the one in progress — a window is always 100% of itself.
+  It is a yardstick, not a quota. If Claude has actually cut a window short, the
+  note says which one and how big it was, because that is the one point on the
+  scale it drew itself.
+
+If nothing has run for five hours there is no window, and the strip says so
+rather than showing an empty bar.
 
 ## On the page
 
@@ -192,6 +222,7 @@ Everything comes from what Claude Code already writes to disk:
 | `~/.claude/sessions/<pid>.json` | Running sessions and their live status |
 | `<session cwd>/.git/HEAD` | The branch a running session is on |
 | `~/.claude/projects/**/*.jsonl` | Session history — titles, prompts, models, branch |
+| `~/.claude/projects/*/*/subagents/agent-*.jsonl` | Subagent turns, for the session-limit window they bill to |
 | `~/.claude.json` | Per-project rollup metrics *(not read yet)* |
 
 Set `CLAUDE_CONFIG_DIR` (or pass `--claude-dir`) if your Claude data lives
@@ -339,6 +370,15 @@ transcripts on the development machine, and free once memoised.
 any single line it holds — the largest record on the development machine is 9.4 MB,
 and memory should be a property of the reader, not of the biggest tool output in the
 session. A 37 MB transcript answers in 99 ms; the slowest of all 795 is 140 ms.
+
+**The session limit** is the one read that has to cover a week rather than a page,
+because the yardstick it draws is the heaviest window in that week. It bounds itself
+the same way: a transcript is append-only, so one last written before the cutoff
+cannot hold a record after it, and `mtime` settles that without opening anything. The
+files that survive are then reduced to half-hour buckets and memoised per file
+version — the part that does not change — so only the handful still being appended to
+are ever re-read. 293 files on the development machine: ~420 ms cold, ~6 ms warm. The
+page asks every 15 seconds and ticks the countdown itself in between.
 
 Malformed lines are counted and skipped, never thrown on: the `.jsonl` format is
 private and undocumented, and it will change under us. When it does, the detail

@@ -1,6 +1,15 @@
 /** How often we ask the server for the session list. Phase 5 may replace this with SSE. */
 const SESSIONS_INTERVAL_MS = 2000;
 const HEALTH_INTERVAL_MS = 15000;
+/**
+ * How often the session-limit strip is re-read.
+ *
+ * Far slower than the session list, because it is a far wider read — a week of
+ * transcripts rather than the rows on screen — and because a five-hour window does
+ * not move fast enough to be worth asking about every two seconds. The countdown
+ * beside it ticks locally, so the strip still feels live between readings.
+ */
+const LIMITS_INTERVAL_MS = 15000;
 /** Uptime is redrawn on its own beat so the clock ticks between polls. */
 const TICK_MS = 1000;
 
@@ -85,6 +94,10 @@ const state = {
   to: view.to,
   /** Which of `RECENT_ORDERS` the Recent table is in. */
   sort: view.sort,
+  /** The last reading of the five-hour usage window, or null before the first one. */
+  limits: null,
+  /** No source could find its data. The strip and the tables all step aside for the notice. */
+  noData: false,
   /** Consecutive failed polls. One is a blip; two is worth interrupting for. */
   failures: 0,
   /** Id of the session the panel is showing, or null when it is closed. */
@@ -132,12 +145,26 @@ async function pollHealth() {
  */
 function renderAvailability(sources) {
   const missing = sources.length > 0 && !sources.some((source) => source.available);
+  state.noData = missing;
   const notice = byId('no-data');
   if (notice) notice.hidden = !missing;
   for (const id of ['live-panel', 'recent-panel']) {
     const panel = byId(id);
     if (panel) panel.hidden = missing;
   }
+  // The strip has its own reason to be hidden, so it is told rather than set here.
+  renderLimits();
+}
+
+async function pollLimits() {
+  try {
+    state.limits = await getJson('/api/limits');
+  } catch {
+    // The session poll owns the connection indicator. A strip that keeps showing the
+    // last reading says less that is wrong than one that vanishes on a single miss.
+    return;
+  }
+  renderLimits();
 }
 
 /**
@@ -401,6 +428,121 @@ function renderHint(shown) {
   setText('search-hint', state.query ? `${shown} of ${total} match “${state.query}”` : '');
 }
 
+/* ---------------------------------------------------------- session limit */
+
+/**
+ * Claude Code's five-hour session limit, drawn above the tables.
+ *
+ * The ceiling itself is enforced server-side and never written to disk — the only
+ * trace of it in a transcript is the turn it refused — so there is no true
+ * percentage to show. What the bar measures against is the heaviest window this
+ * machine has already put through, and the note under it says so plainly rather
+ * than letting a percentage imply a number nobody has.
+ */
+function renderLimits() {
+  const panel = byId('limits-panel');
+  if (!panel) return;
+
+  const limits = state.limits;
+  panel.hidden = state.noData || !limits;
+  if (panel.hidden) return;
+
+  const current = currentWindow();
+  const share = limitShare(limits);
+
+  setText('limits-window', current ? `${formatClock(current.startedAt)} → ${formatClock(current.resetsAt)}` : '');
+  setText(
+    'limits-reset',
+    current ? `Resets ${formatClock(current.resetsAt)} · ${formatClockSpan(current.resetsAt - Date.now())} left` : '',
+  );
+
+  const bar = byId('limits-bar');
+  const fill = byId('limits-bar-fill');
+  if (bar) bar.hidden = share === undefined;
+  if (fill && share !== undefined) {
+    // Past the yardstick the bar simply reads full. The share beside it keeps
+    // counting, so a record-breaking window is still legible as one.
+    fill.style.width = `${Math.min(100, share * 100)}%`;
+    fill.setAttribute('data-usage', limitLevel(share));
+  }
+
+  const stats = byId('limits-stats');
+  if (stats) stats.hidden = !current;
+  const shareRow = byId('limits-share-row');
+  if (shareRow) shareRow.hidden = share === undefined;
+
+  if (current) {
+    setText('limits-used', formatCompactCount(billedTokens(current.tokens)));
+    setText('limits-share', share === undefined ? '—' : formatShare(share));
+    setText('limits-turns', formatCount(current.turns));
+    setText('limits-cache', formatCompactCount(current.tokens.cacheRead));
+  }
+
+  setText('limits-note', limitsNote(limits, share));
+}
+
+/**
+ * The window in progress, or nothing once its five hours are up.
+ *
+ * The server settles this too, but only every fifteen seconds, and a strip that
+ * outlives its own window is a strip telling the reader something false.
+ */
+function currentWindow() {
+  const current = state.limits?.current;
+  return current && current.resetsAt > Date.now() ? current : undefined;
+}
+
+/** How full the window in progress is, against the heaviest one on record. */
+function limitShare(limits) {
+  const used = billedTokens(currentWindow()?.tokens);
+  const ceiling = billedTokens(limits.reference?.tokens);
+  return used && ceiling ? used / ceiling : undefined;
+}
+
+/**
+ * Input, output and newly-cached tokens — how a five-hour window is sized.
+ *
+ * Mirrors `billedTokens` in `limits.ts`; the number on screen and the number the
+ * server ranked windows by have to be the same one. Cache reads are left out
+ * because they cost a fraction as much and outweigh the rest fifty to one.
+ */
+function billedTokens(tokens) {
+  return tokens ? tokens.input + tokens.output + tokens.cacheCreate : 0;
+}
+
+/**
+ * The same four-step scale the token cells use, against a limit rather than a
+ * context window — so the steps are halves and quarters rather than tenths.
+ */
+function limitLevel(share) {
+  if (share >= 0.9) return 'bad';
+  if (share >= 0.75) return 'hot';
+  if (share >= 0.5) return 'warn';
+  return 'ok';
+}
+
+/** What the bar is a share of, in words — including when it is a share of nothing. */
+function limitsNote(limits, share) {
+  if (!currentWindow()) {
+    return 'No window open — nothing has been billed in the last five hours. The next prompt starts one.';
+  }
+
+  const measured =
+    'Claude enforces the real ceiling itself and never writes it to disk, so this is measured from the transcripts rather than read off it.';
+
+  if (share === undefined) {
+    return `Nothing to measure against yet — no earlier window in the last ${limits.historyDays} days billed anything. ${measured}`;
+  }
+
+  const heaviest = `${formatCompactCount(billedTokens(limits.reference.tokens))} on ${formatDay(limits.reference.startedAt)}`;
+  // A window Claude actually refused is the one hard point on the scale, and it is
+  // rarely the heaviest — the ceiling is weighted by model, not counted in tokens.
+  const cut = limits.lastLimited
+    ? ` It last cut a window short on ${formatDay(limits.lastLimited.startedAt)}, at ${formatCompactCount(billedTokens(limits.lastLimited.tokens))}.`
+    : '';
+  return `Against the heaviest five-hour window of your last ${limits.historyDays} days — ${heaviest}.${cut} ${measured}`;
+}
+
 /* --------------------------------------------------------------- filtering */
 
 function matchesQuery(session) {
@@ -449,8 +591,13 @@ function shortModel(model) {
 
 /** Compact and stable in width: `4d 2h`, `2h 07m`, `9m 12s`, `41s`. */
 function formatUptime(startedAt) {
-  if (!startedAt) return '—';
-  const seconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+  return startedAt ? formatClockSpan(Date.now() - startedAt) : '—';
+}
+
+/** The same shape for a span handed over rather than measured from a start — the
+ *  countdown to a window's reset, which runs the other way. */
+function formatClockSpan(ms) {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -483,6 +630,16 @@ function formatWhen(at) {
     month: 'short',
     ...(sameYear ? {} : { year: 'numeric' }),
   });
+}
+
+/** Clock time alone: a window's start and its reset are both today or tomorrow. */
+function formatClock(at) {
+  return new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+/** `19 Aug` — enough to place a window in the week behind you. */
+function formatDay(at) {
+  return new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 /** Local midnight, `daysAgo` days back. */
@@ -1162,12 +1319,17 @@ syncControls();
 
 pollHealth();
 pollSessions();
+pollLimits();
 setInterval(pollHealth, HEALTH_INTERVAL_MS);
 setInterval(pollSessions, SESSIONS_INTERVAL_MS);
+setInterval(pollLimits, LIMITS_INTERVAL_MS);
 setInterval(() => {
   // The clock, not the data — redrawing between polls keeps uptimes honest.
   for (const session of state.live) {
     const cell = document.querySelector(`#live-body tr[data-id="${session.id}"] .uptime`);
     if (cell) cell.textContent = formatUptime(session.startedAt);
   }
+  // Same reason, and it is also what retires a window the moment it empties rather
+  // than up to fifteen seconds later.
+  renderLimits();
 }, TICK_MS);

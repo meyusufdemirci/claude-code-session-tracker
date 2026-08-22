@@ -15,6 +15,8 @@ export type {
   SessionProject,
   SessionStatus,
   SessionTokenTotals,
+  UsageLimits,
+  UsageWindow,
 } from './types.ts';
 
 export { SessionRegistry } from './registry.ts';

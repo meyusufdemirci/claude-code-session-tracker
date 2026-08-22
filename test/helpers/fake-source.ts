@@ -1,4 +1,4 @@
-import type { Session, SessionDetail } from '../../src/core/types.ts';
+import type { Session, SessionDetail, UsageLimits } from '../../src/core/types.ts';
 import type { RecentQuery, RecentSessions, SessionSource } from '../../src/sources/source.ts';
 
 /**
@@ -16,6 +16,8 @@ export interface FakeSourceOptions {
   live?: Session[];
   recent?: Session[];
   details?: Record<string, SessionDetail>;
+  /** Left out entirely to model a source that cannot measure a rate-limit window. */
+  limits?: UsageLimits;
 }
 
 export class FakeSource implements SessionSource {
@@ -36,7 +38,15 @@ export class FakeSource implements SessionSource {
     this.#live = options.live ?? [];
     this.#recent = options.recent ?? [];
     this.#details = options.details ?? {};
+    // Assigned rather than declared, because `limits` is optional on the interface
+    // and a source that leaves it off is the case the registry has to handle.
+    if (options.limits) {
+      const limits = options.limits;
+      this.limits = async (): Promise<UsageLimits> => limits;
+    }
   }
+
+  limits?: () => Promise<UsageLimits>;
 
   async isAvailable(): Promise<boolean> {
     return this.#available;
