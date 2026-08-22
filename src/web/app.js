@@ -488,7 +488,68 @@ function renderLimitCard(card, limit) {
   if (stats) stats.hidden = !current;
   if (current) setField(card, 'used', formatCompactCount(billedTokens(current.tokens)));
 
+  renderPace(card, limit, current);
+
   setField(card, 'note', limitNote(limit, current, share));
+}
+
+/**
+ * Where the window in progress is headed, in the cell beside what it has spent.
+ *
+ * The whole cell leaves rather than reading `—`: a window too young to have a pace
+ * has nothing to say about one, and an em dash beside a number invites the reader to
+ * wonder what went missing. Tinted on the bar's scale, so the two agree about when
+ * a window is getting expensive.
+ */
+function renderPace(card, limit, current) {
+  const pace = limitPace(limit, current);
+  const row = field(card, 'pace-row');
+  if (row) row.hidden = pace === undefined;
+  if (pace === undefined) return;
+
+  const node = field(card, 'pace');
+  if (!node) return;
+  node.textContent = formatCompactCount(Math.round(pace));
+
+  const ceiling = billedTokens(limit.reference?.tokens);
+  // No closed window to measure against means no scale to tint on — the same
+  // silence the bar keeps when it has no yardstick.
+  if (ceiling) node.setAttribute('data-usage', limitLevel(pace / ceiling));
+  else node.removeAttribute('data-usage');
+}
+
+/**
+ * How much of a window has to be behind it before its pace means anything.
+ *
+ * The arithmetic is sound from the first turn; the sample it draws on is not. Two
+ * minutes into five hours a single heavy turn projects sixty times itself, so the
+ * cell stays away until the window has said enough about its own rate to be worth
+ * repeating — an hour of the five, a day and a half of the seven.
+ */
+const PACE_MIN_ELAPSED = 0.2;
+
+/**
+ * What this window comes to by its reset if it carries on at the rate it has kept.
+ *
+ * The bar behind it looks backwards — a share of the heaviest window on record, and
+ * so an answer to how much has gone. This is the other half: whether what is left of
+ * the clock will survive the rate it is being spent at, which is the one thing on the
+ * card that can change what the reader does next.
+ *
+ * Nothing is returned for a rolling week. That one ends at the instant it was
+ * measured, so there is no remainder to project into and the projection would only
+ * be the total again, wearing a word that promises a forecast.
+ */
+function limitPace(limit, current, now = Date.now()) {
+  if (!current || limit.clock === 'rolling') return undefined;
+
+  const used = billedTokens(current.tokens);
+  const total = current.resetsAt - current.startedAt;
+  const elapsed = now - current.startedAt;
+  if (!used || total <= 0 || elapsed <= 0) return undefined;
+  if (elapsed / total < PACE_MIN_ELAPSED) return undefined;
+
+  return used * (total / elapsed);
 }
 
 /** A part of one card, by role. The two cards are identical, so ids would collide. */

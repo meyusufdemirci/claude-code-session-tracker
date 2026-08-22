@@ -34,8 +34,9 @@ else — and puts it on one page.
 
 - **Your limits**, at the top: two cards, one for the five-hour window Claude
   Code calls a session limit and one for the seven-day window it calls a weekly
-  limit — how much of each you have spent, when it resets, and how that compares
-  with the heaviest window you have already put through.
+  limit — how much of each you have spent, when it resets, where it lands if you
+  keep going at the rate you have kept, and how that compares with the heaviest
+  window you have already put through.
 - **Active sessions**, checked twice against the OS so a stale file or a
   recycled PID never shows up as running.
 - **Recent sessions** across every project, with Claude's own title, the first
@@ -184,6 +185,13 @@ transcript is the turn it refused — so both cards at the top of the page are
   are shown apart: they cost a fraction as much and outweigh the rest roughly
   fifty to one, so folding them in would produce a number that tracks how long
   your conversations are rather than how much work you asked for.
+- **Projected** is where the window in progress lands by its reset if it carries
+  on at the rate it has kept so far. It is tinted on the bar's own scale, so a
+  green bar beside a red projection is the card saying this window is calm now
+  and will not stay that way — the one reading on it that looks forwards. It
+  stays away until a fifth of the window has gone, since a rate read off the
+  first few minutes projects noise, and stays away from a rolling week entirely:
+  that one ends at the instant it is measured, leaving nothing to project into.
 - **The share** is against the heaviest window that has already closed — the last
   7 days for the five-hour card, the last 28 for the weekly one — never the one
   in progress, since a window is always 100% of itself. It is a yardstick, not a
