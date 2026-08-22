@@ -156,7 +156,7 @@ export function commandRecord(name: string, args?: string, options: UserOptions 
 }
 
 export interface RejectionOptions extends CommonFields {
-  /** `five_hour` or `weekly`. A weekly refusal runs on a different clock entirely. */
+  /** `five_hour`, or `seven_day` and its per-model variants. A weekly refusal runs on a different clock entirely. */
   rateLimitType?: string;
   /** Epoch *seconds*, which is how Claude Code writes it. */
   resetsAt?: number;

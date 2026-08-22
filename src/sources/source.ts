@@ -59,12 +59,12 @@ export interface SessionSource {
   detail(id: string): Promise<SessionDetail | null>;
 
   /**
-   * Usage against this CLI's own rate-limit window.
+   * Usage against this CLI's own rate-limit windows.
    *
    * Optional, unlike the four above: a limit is a property of whoever bills the
    * requests, and another CLI may not have one, may not leave enough on disk to
    * measure it, or may simply be able to ask its own server. A source that does
-   * not implement this is not broken — the page just leaves the strip off.
+   * not implement this is not broken — the page just leaves the cards off.
    */
   limits?(): Promise<UsageLimits>;
 }

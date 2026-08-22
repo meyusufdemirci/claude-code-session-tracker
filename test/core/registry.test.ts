@@ -211,8 +211,8 @@ describe('SessionRegistry.detail', () => {
 
 describe('SessionRegistry.limits', () => {
   const limits: UsageLimits = {
-    current: usageWindow,
-    historyDays: 7,
+    session: { windowMs: 18_000, clock: 'chained', current: usageWindow, historyDays: 7 },
+    weekly: { windowMs: 604_800_000, clock: 'rolling', historyDays: 28 },
     generatedAt: 2_000,
   };
 

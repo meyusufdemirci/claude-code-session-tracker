@@ -78,28 +78,55 @@
         <p class="hint">This page keeps checking, so it will fill in on its own.</p>
       </section>
 
-      <!-- Usage against Claude Code's five-hour session limit. Hidden until the first
-           reading arrives, so a page that cannot measure one simply does not show it. -->
+      <!-- Usage against Claude Code's two limits, side by side: the five-hour window
+           it calls a session limit, and the seven-day one it calls a weekly limit.
+           Hidden until the first reading arrives, so a page that cannot measure them
+           simply does not show them. The two cards are the same shape, so their parts
+           are named by role rather than by a page-unique id. -->
       <section class="panel limits" id="limits-panel" hidden>
-        <div class="panel-head">
-          <h2>Session limit <span class="count" id="limits-window"></span></h2>
-          <p class="limits-reset" id="limits-reset"></p>
-        </div>
-
-        <div class="limits-bar" id="limits-bar" hidden>
-          <span class="limits-bar-fill" id="limits-bar-fill"></span>
-        </div>
-
-        <dl class="stats" id="limits-stats" hidden>
-          <div title="Input, output and newly-cached tokens billed inside this five-hour window. Cache reads are counted apart — they cost a fraction as much and outweigh the rest fifty to one.">
-            <dt>Used</dt><dd id="limits-used">—</dd>
+        <article class="limit-card" id="limit-session">
+          <div class="panel-head">
+            <h2>Session limit <span class="count" data-role="window"></span></h2>
+            <p class="limits-reset" data-role="reset"></p>
           </div>
-          <div id="limits-share-row"><dt>Of heaviest</dt><dd id="limits-share">—</dd></div>
-          <div><dt>Turns</dt><dd id="limits-turns">—</dd></div>
-          <div><dt>Cache read</dt><dd id="limits-cache">—</dd></div>
-        </dl>
 
-        <p class="limits-note" id="limits-note"></p>
+          <div class="limits-bar" data-role="bar" hidden>
+            <span class="limits-bar-fill" data-role="fill"></span>
+          </div>
+
+          <dl class="stats" data-role="stats" hidden>
+            <div title="Input, output and newly-cached tokens billed inside this five-hour window. Cache reads are counted apart — they cost a fraction as much and outweigh the rest fifty to one.">
+              <dt>Used</dt><dd data-role="used">—</dd>
+            </div>
+            <div data-role="share-row"><dt>Of heaviest</dt><dd data-role="share">—</dd></div>
+            <div><dt>Turns</dt><dd data-role="turns">—</dd></div>
+            <div><dt>Cache read</dt><dd data-role="cache">—</dd></div>
+          </dl>
+
+          <p class="limits-note" data-role="note"></p>
+        </article>
+
+        <article class="limit-card" id="limit-weekly">
+          <div class="panel-head">
+            <h2>Weekly limit <span class="count" data-role="window"></span></h2>
+            <p class="limits-reset" data-role="reset"></p>
+          </div>
+
+          <div class="limits-bar" data-role="bar" hidden>
+            <span class="limits-bar-fill" data-role="fill"></span>
+          </div>
+
+          <dl class="stats" data-role="stats" hidden>
+            <div title="Input, output and newly-cached tokens billed inside this seven-day window. Cache reads are counted apart — they cost a fraction as much and outweigh the rest fifty to one.">
+              <dt>Used</dt><dd data-role="used">—</dd>
+            </div>
+            <div data-role="share-row"><dt>Of heaviest</dt><dd data-role="share">—</dd></div>
+            <div><dt>Turns</dt><dd data-role="turns">—</dd></div>
+            <div><dt>Cache read</dt><dd data-role="cache">—</dd></div>
+          </dl>
+
+          <p class="limits-note" data-role="note"></p>
+        </article>
       </section>
 
       <section class="panel" id="live-panel">

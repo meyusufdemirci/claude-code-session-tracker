@@ -426,16 +426,41 @@ body.drawer-open { overflow: hidden; }
 .stats > div { display: flex; flex-direction: column; gap: .1rem; }
 .stats dd { font-size: 1.05rem; font-variant-numeric: tabular-nums; font-weight: 600; }
 
-/* The session-limit strip. The bar carries the same four-step usage colouring as
-   the token cells, so a glance across the page reads on one scale. */
+/* The two limit cards. Both bars carry the same four-step usage colouring as the
+   token cells, so a glance across the page reads on one scale. */
+.limits { display: grid; gap: 1.4rem; }
+
+.limit-card { min-width: 0; }
+
+/* A rule between the two rather than a box around each: they are two readings of
+   one thing, and boxing them separately would say otherwise. It hangs off the
+   card in front being visible, so a limit this server cannot measure leaves no
+   rule dangling. Stacked is the starting point, which is what keeps the rule and
+   the layout from ever disagreeing — the query below turns both at once. */
+.limit-card:not([hidden]) + .limit-card { border-top: 1px solid var(--rule); padding-top: 1.4rem; }
+
+/* Wide enough for both cards to hold a bar and a row of stats without wrapping.
+   Columns come from the cards rather than from a fixed pair, so one card alone
+   takes the width instead of leaving a gap where the other would have been. */
+@media (min-width: 52rem) {
+  .limits { grid-auto-flow: column; grid-auto-columns: 1fr; gap: 1.4rem 2.6rem; }
+
+  .limit-card:not([hidden]) + .limit-card {
+    border-top: 0;
+    padding-top: 0;
+    border-left: 1px solid var(--rule);
+    padding-left: 2.6rem;
+  }
+}
+
 .limits .panel-head { align-items: baseline; }
 
-/* The drawer's stats sit in a narrow column and want the width; these have the whole
+/* The drawer's stats sit in a narrow column and want the width; these have half the
    page and would drift apart across it, so they cluster left at a readable pitch. */
 .limits .stats {
-  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 9rem));
+  grid-template-columns: repeat(auto-fit, minmax(5.5rem, 7.5rem));
   justify-content: start;
-  gap: .8rem 3rem;
+  gap: .8rem 1.8rem;
 }
 
 .limits-reset { margin: 0; font-size: .78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
@@ -460,7 +485,7 @@ body.drawer-open { overflow: hidden; }
 .limits-bar-fill[data-usage="hot"] { background: var(--hot); }
 .limits-bar-fill[data-usage="bad"] { background: var(--bad); }
 
-.limits-note { margin: 1rem 0 0; font-size: .78rem; color: var(--ink-faint); max-width: 68ch; }
+.limits-note { margin: 1rem 0 0; font-size: .78rem; color: var(--ink-faint); max-width: 62ch; }
 
 /* Static and conversation stacked left to right; whatever's left of `windowTokens`
    is just the bar's own background showing through — no third segment to keep in sync. */

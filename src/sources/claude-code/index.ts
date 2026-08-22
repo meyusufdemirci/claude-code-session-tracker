@@ -34,6 +34,7 @@ export class ClaudeCodeSource implements SessionSource {
    * Separate from `#transcripts` because it answers a different question about the
    * same files — when the tokens were billed, not how many in total — and because it
    * covers subagent transcripts too, which are not sessions and so never appear there.
+   * One entry serves both limits: the same half hours are counted against both clocks.
    */
   readonly #buckets = new FileCache<UsageBucket[]>();
 

@@ -2,16 +2,18 @@
 const SESSIONS_INTERVAL_MS = 2000;
 const HEALTH_INTERVAL_MS = 15000;
 /**
- * How often the session-limit strip is re-read.
+ * How often the limit cards are re-read.
  *
- * Far slower than the session list, because it is a far wider read — a week of
- * transcripts rather than the rows on screen — and because a five-hour window does
- * not move fast enough to be worth asking about every two seconds. The countdown
- * beside it ticks locally, so the strip still feels live between readings.
+ * Far slower than the session list, because it is a far wider read — weeks of
+ * transcripts rather than the rows on screen — and because neither a five-hour
+ * window nor a week moves fast enough to be worth asking about every two seconds.
+ * The countdown beside them ticks locally, so they still feel live between readings.
  */
 const LIMITS_INTERVAL_MS = 15000;
 /** Uptime is redrawn on its own beat so the clock ticks between polls. */
 const TICK_MS = 1000;
+/** Where a window stops being read in clock time and starts being read in days. */
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How often an open panel re-reads its session. Only for live ones — a finished
@@ -94,7 +96,7 @@ const state = {
   to: view.to,
   /** Which of `RECENT_ORDERS` the Recent table is in. */
   sort: view.sort,
-  /** The last reading of the five-hour usage window, or null before the first one. */
+  /** The last reading of the two usage limits, or null before the first one. */
   limits: null,
   /** No source could find its data. The strip and the tables all step aside for the notice. */
   noData: false,
@@ -428,17 +430,22 @@ function renderHint(shown) {
   setText('search-hint', state.query ? `${shown} of ${total} match “${state.query}”` : '');
 }
 
-/* ---------------------------------------------------------- session limit */
+/* ----------------------------------------------------------- usage limits */
 
 /**
- * Claude Code's five-hour session limit, drawn above the tables.
+ * Claude Code's two limits, drawn side by side above the tables.
  *
- * The ceiling itself is enforced server-side and never written to disk — the only
- * trace of it in a transcript is the turn it refused — so there is no true
- * percentage to show. What the bar measures against is the heaviest window this
- * machine has already put through, and the note under it says so plainly rather
- * than letting a percentage imply a number nobody has.
+ * Neither ceiling is enforced anywhere we can read — both are enforced server-side
+ * and the only trace either leaves in a transcript is a turn it refused — so there
+ * is no true percentage to show for either. What each bar measures against is the
+ * heaviest window this machine has already put through on that clock, and the note
+ * under it says so plainly rather than letting a percentage imply a number nobody has.
  */
+const LIMIT_CARDS = [
+  { id: 'limit-session', key: 'session' },
+  { id: 'limit-weekly', key: 'weekly' },
+];
+
 function renderLimits() {
   const panel = byId('limits-panel');
   if (!panel) return;
@@ -447,17 +454,28 @@ function renderLimits() {
   panel.hidden = state.noData || !limits;
   if (panel.hidden) return;
 
-  const current = currentWindow();
-  const share = limitShare(limits);
+  for (const { id, key } of LIMIT_CARDS) renderLimitCard(byId(id), limits[key]);
+}
 
-  setText('limits-window', current ? `${formatClock(current.startedAt)} → ${formatClock(current.resetsAt)}` : '');
-  setText(
-    'limits-reset',
-    current ? `Resets ${formatClock(current.resetsAt)} · ${formatClockSpan(current.resetsAt - Date.now())} left` : '',
-  );
+/**
+ * One limit's card. Both are the same shape, which is why they are one function:
+ * a week and five hours differ in how their edges are found, not in what is shown.
+ */
+function renderLimitCard(card, limit) {
+  if (!card) return;
+  // A server too old to measure this limit leaves the card off rather than drawing
+  // an empty one beside a full one.
+  card.hidden = !limit;
+  if (!limit) return;
 
-  const bar = byId('limits-bar');
-  const fill = byId('limits-bar-fill');
+  const current = currentWindow(limit);
+  const share = limitShare(limit, current);
+
+  setField(card, 'window', current ? windowRange(limit, current) : '');
+  setField(card, 'reset', current ? resetLine(limit, current) : '');
+
+  const bar = field(card, 'bar');
+  const fill = field(card, 'fill');
   if (bar) bar.hidden = share === undefined;
   if (fill && share !== undefined) {
     // Past the yardstick the bar simply reads full. The share beside it keeps
@@ -466,41 +484,71 @@ function renderLimits() {
     fill.setAttribute('data-usage', limitLevel(share));
   }
 
-  const stats = byId('limits-stats');
+  const stats = field(card, 'stats');
   if (stats) stats.hidden = !current;
-  const shareRow = byId('limits-share-row');
+  const shareRow = field(card, 'share-row');
   if (shareRow) shareRow.hidden = share === undefined;
 
   if (current) {
-    setText('limits-used', formatCompactCount(billedTokens(current.tokens)));
-    setText('limits-share', share === undefined ? '—' : formatShare(share));
-    setText('limits-turns', formatCount(current.turns));
-    setText('limits-cache', formatCompactCount(current.tokens.cacheRead));
+    setField(card, 'used', formatCompactCount(billedTokens(current.tokens)));
+    setField(card, 'share', share === undefined ? '—' : formatShare(share));
+    setField(card, 'turns', formatCount(current.turns));
+    setField(card, 'cache', formatCompactCount(current.tokens.cacheRead));
   }
 
-  setText('limits-note', limitsNote(limits, share));
+  setField(card, 'note', limitNote(limit, current, share));
 }
 
+/** A part of one card, by role. The two cards are identical, so ids would collide. */
+function field(card, role) {
+  return card.querySelector(`[data-role="${role}"]`);
+}
+
+const setField = (card, role, value) => {
+  const node = field(card, role);
+  if (node) node.textContent = value;
+};
+
 /**
- * The window in progress, or nothing once its five hours are up.
+ * The window in progress, or nothing once it has emptied.
  *
  * The server settles this too, but only every fifteen seconds, and a strip that
- * outlives its own window is a strip telling the reader something false.
+ * outlives its own window is a strip telling the reader something false. A rolling
+ * week is the exception: it ends at the instant it was measured and slides with the
+ * clock, so only a real reset can retire one between polls.
  */
-function currentWindow() {
-  const current = state.limits?.current;
-  return current && current.resetsAt > Date.now() ? current : undefined;
+function currentWindow(limit) {
+  const current = limit?.current;
+  if (!current) return undefined;
+  if (limit.clock === 'rolling') return current;
+  return current.resetsAt > Date.now() ? current : undefined;
+}
+
+/** The window's two ends, at the coarseness its length deserves. */
+function windowRange(limit, current) {
+  if (limit.clock === 'rolling') return `${formatDay(current.startedAt)} → now`;
+  if (limit.windowMs > DAY_MS) {
+    return `${formatDay(current.startedAt)} → ${formatDay(current.resetsAt)}`;
+  }
+  return `${formatClock(current.startedAt)} → ${formatClock(current.resetsAt)}`;
+}
+
+/** When it empties and how long that is — or, for a rolling week, that it does not. */
+function resetLine(limit, current) {
+  if (limit.clock === 'rolling') return 'Rolling · seven days to now';
+  const when = limit.windowMs > DAY_MS ? formatDayClock(current.resetsAt) : formatClock(current.resetsAt);
+  return `Resets ${when} · ${formatClockSpan(current.resetsAt - Date.now())} left`;
 }
 
 /** How full the window in progress is, against the heaviest one on record. */
-function limitShare(limits) {
-  const used = billedTokens(currentWindow()?.tokens);
-  const ceiling = billedTokens(limits.reference?.tokens);
+function limitShare(limit, current) {
+  const used = billedTokens(current?.tokens);
+  const ceiling = billedTokens(limit.reference?.tokens);
   return used && ceiling ? used / ceiling : undefined;
 }
 
 /**
- * Input, output and newly-cached tokens — how a five-hour window is sized.
+ * Input, output and newly-cached tokens — how a window is sized.
  *
  * Mirrors `billedTokens` in `limits.ts`; the number on screen and the number the
  * server ranked windows by have to be the same one. Cache reads are left out
@@ -521,26 +569,38 @@ function limitLevel(share) {
   return 'ok';
 }
 
-/** What the bar is a share of, in words — including when it is a share of nothing. */
-function limitsNote(limits, share) {
-  if (!currentWindow()) {
-    return 'No window open — nothing has been billed in the last five hours. The next prompt starts one.';
+/** What this bar is a share of, in words — including when it is a share of nothing. */
+function limitNote(limit, current, share) {
+  const week = limit.windowMs > DAY_MS;
+
+  if (!current) {
+    return week
+      ? 'Nothing billed in the last seven days. The next prompt opens a week.'
+      : 'No window open — nothing has been billed in the last five hours. The next prompt starts one.';
   }
 
+  // How the window's edges were found, which is the part a reader cannot check.
   const measured =
-    'Claude enforces the real ceiling itself and never writes it to disk, so this is measured from the transcripts rather than read off it.';
+    limit.clock === 'rolling'
+      ? 'Claude resets the week on a clock it keeps to itself and never writes down, so this counts the seven days behind you rather than guessing where your week begins.'
+      : limit.clock === 'reported'
+        ? 'These edges are Claude’s own: it named this reset on a turn it refused, and every week is stepped from there.'
+        : 'Claude enforces the real ceiling itself and never writes it to disk, so this is measured from the transcripts rather than read off it.';
 
   if (share === undefined) {
-    return `Nothing to measure against yet — no earlier window in the last ${limits.historyDays} days billed anything. ${measured}`;
+    const span = week ? 'week' : 'window';
+    return `Nothing to measure against yet — no earlier ${span} in the last ${limit.historyDays} days billed anything. ${measured}`;
   }
 
-  const heaviest = `${formatCompactCount(billedTokens(limits.reference.tokens))} on ${formatDay(limits.reference.startedAt)}`;
+  const span = week ? 'seven days' : 'five-hour window';
+  // A week is read from the day it opened; a five-hour window happened on one.
+  const heaviest = `${formatCompactCount(billedTokens(limit.reference.tokens))} ${week ? 'from' : 'on'} ${formatDay(limit.reference.startedAt)}`;
   // A window Claude actually refused is the one hard point on the scale, and it is
   // rarely the heaviest — the ceiling is weighted by model, not counted in tokens.
-  const cut = limits.lastLimited
-    ? ` It last cut a window short on ${formatDay(limits.lastLimited.startedAt)}, at ${formatCompactCount(billedTokens(limits.lastLimited.tokens))}.`
+  const cut = limit.lastLimited
+    ? ` It last cut one short on ${formatDay(limit.lastLimited.startedAt)}, at ${formatCompactCount(billedTokens(limit.lastLimited.tokens))}.`
     : '';
-  return `Against the heaviest five-hour window of your last ${limits.historyDays} days — ${heaviest}.${cut} ${measured}`;
+  return `Against the heaviest ${span} of your last ${limit.historyDays} days — ${heaviest}.${cut} ${measured}`;
 }
 
 /* --------------------------------------------------------------- filtering */
@@ -640,6 +700,17 @@ function formatClock(at) {
 /** `19 Aug` — enough to place a window in the week behind you. */
 function formatDay(at) {
   return new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/** `Tue 19 Aug, 3:00 AM` — a reset days out needs the day as well as the hour. */
+function formatDayClock(at) {
+  return new Date(at).toLocaleString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 /** Local midnight, `daysAgo` days back. */

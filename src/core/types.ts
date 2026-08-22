@@ -124,7 +124,7 @@ export interface SessionDetail extends Session {
 }
 
 /**
- * One five-hour usage window — what Claude Code calls a session limit.
+ * One window of one limit — five hours for the session limit, seven days for the weekly.
  *
  * The quota itself is enforced server-side and never written to disk. The only
  * trace it leaves in a transcript is a rejection record on the turn that got cut
@@ -132,22 +132,38 @@ export interface SessionDetail extends Session {
  * the turn timestamps, its size from the `usage` totals those turns carry.
  */
 export interface UsageWindow {
-  /** The window's first billed turn, floored to the half hour — where Claude puts it. */
+  /** Where the window opens. Five-hour windows are floored to the half hour — where Claude puts them. */
   startedAt: number;
-  /** The moment the window empties. From Claude itself when it told us, else `startedAt` plus five hours. */
+  /** The moment the window empties. From Claude itself when it told us, else `startedAt` plus its length. */
   resetsAt: number;
   /** True when that reset time is Claude's own, taken off a rejection record rather than derived. */
   resetsAtIsReported: boolean;
   tokens: SessionTokenTotals;
   /** Assistant turns billed inside the window — turns, not records. */
   turns: number;
-  /** Claude Code recorded a five-hour rate-limit rejection inside this window. */
+  /** Claude Code recorded a rate-limit rejection on this limit's clock inside this window. */
   limited: boolean;
 }
 
-/** Usage against the five-hour limit: the window in progress, and a yardstick for it. */
-export interface UsageLimits {
-  /** The window the clock is inside. Absent when nothing has run for five hours. */
+/**
+ * How a limit's windows were placed on the clock.
+ *
+ * `chained` — laid end to end from the turn timestamps, which is all the five-hour
+ * window ever needs: a gap of five quiet hours closes one and the next turn opens
+ * the next.
+ * `reported` — pinned to a reset Claude itself wrote down on a turn it refused.
+ * `rolling` — counted back from the moment of measurement, because nothing on disk
+ * says where this clock's week actually starts.
+ */
+export type UsageClock = 'chained' | 'reported' | 'rolling';
+
+/** One rate limit: the window in progress, and what there is to read it against. */
+export interface UsageLimit {
+  /** How long one window of this limit runs. */
+  windowMs: number;
+  /** Where the windows' edges came from — see `UsageClock`. */
+  clock: UsageClock;
+  /** The window the clock is inside. Absent when nothing has been billed in one. */
   current?: UsageWindow;
   /**
    * The heaviest window that has already closed.
@@ -169,5 +185,18 @@ export interface UsageLimits {
   lastLimited?: UsageWindow;
   /** How many days back `reference` looked. */
   historyDays: number;
+}
+
+/**
+ * Both limits Claude Code bills against, measured from the same sweep.
+ *
+ * They are two clocks over one set of turns, not two readings — which is why they
+ * are returned together: the transcripts are read once and counted twice.
+ */
+export interface UsageLimits {
+  /** The five-hour window Claude Code calls a session limit. */
+  session: UsageLimit;
+  /** The seven-day window it calls a weekly limit. */
+  weekly: UsageLimit;
   generatedAt: number;
 }

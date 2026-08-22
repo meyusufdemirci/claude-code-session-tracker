@@ -132,15 +132,20 @@ describe('GET /api/sessions/:id', () => {
 
 describe('GET /api/limits', () => {
   const limits: UsageLimits = {
-    current: {
-      startedAt: 1_000,
-      resetsAt: 19_000,
-      resetsAtIsReported: false,
-      tokens: { input: 1, output: 2, cacheRead: 3, cacheCreate: 4 },
-      turns: 1,
-      limited: false,
+    session: {
+      windowMs: 18_000,
+      clock: 'chained',
+      current: {
+        startedAt: 1_000,
+        resetsAt: 19_000,
+        resetsAtIsReported: false,
+        tokens: { input: 1, output: 2, cacheRead: 3, cacheCreate: 4 },
+        turns: 1,
+        limited: false,
+      },
+      historyDays: 7,
     },
-    historyDays: 7,
+    weekly: { windowMs: 604_800_000, clock: 'rolling', historyDays: 28 },
     generatedAt: 2_000,
   };
 
@@ -150,7 +155,7 @@ describe('GET /api/limits', () => {
     const res = await server.fetch('/api/limits');
 
     strictEqual(res.status, 200);
-    strictEqual((res.json() as UsageLimits).current?.resetsAt, 19_000);
+    strictEqual((res.json() as UsageLimits).session.current?.resetsAt, 19_000);
   });
 
   it('404s when no source can measure one', async (t) => {

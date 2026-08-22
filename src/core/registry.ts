@@ -135,7 +135,7 @@ export class SessionRegistry {
   }
 
   /**
-   * Usage against the rate-limit window, from the first source that can measure it.
+   * Usage against the rate-limit windows, from the first source that can measure them.
    *
    * Not merged across sources, unlike the listings. A limit belongs to whoever bills
    * the requests, so two sources reporting one would be two different limits — adding
