@@ -43,6 +43,10 @@ else — and puts it on one page.
   and last prompt, the model, and the branch — narrowed to today, yesterday, the
   last 3, 7 or 30 days, or a date range of your own, and ordered by recency or by
   token spend.
+- **A history page** at `/history`: where the tokens went over the last 7, 30 or 90
+  days — spend per day, every half hour of the range laid over one week, and every
+  project and model ranked by what they billed. Pick a project and the whole page
+  narrows to it.
 - **A detail panel** per session: message and tool-call counts, token totals,
   elapsed and working time, subagent count, a copyable `claude --resume <id>`,
   and a button that shows the transcript in your file manager.
@@ -206,6 +210,46 @@ transcript is the turn it refused — so both cards at the top of the page are
 
 If nothing has run in a window there is none, and the card says so rather than
 showing an empty bar.
+
+## Where the tokens went
+
+The limit cards say how full the window in progress is. The history page says what
+filled it. It reads the same sweep — the transcripts are read once and counted for
+both — so opening it beside a running dashboard costs a `stat` per file.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/history-dark.png" />
+  <img alt="The history page: a range summary, a bar per day for thirty days, an hour-of-day grid with the busy half hours falling between nine in the morning and eleven at night, and a table of projects ranked by billed tokens" src="docs/history-light.png" />
+</picture>
+
+Four reads, in the order the question gets asked:
+
+- **Spend per day**, a bar for every local day in the range — including the quiet
+  ones, because a chart that closed the gaps would draw a busy fortnight and a
+  scattered month identically. A mark under a bar is a day Claude refused a turn.
+- **Hour of day**, every half hour of the range folded onto one week. This is the
+  reading the daily bars cannot give: whether the five-hour window keeps being
+  opened at nine in the morning or at eleven at night.
+- **Projects**, ranked by billed tokens, with cache reads shown apart. Where two
+  checkouts share a directory name the parent goes in front of it. Pick one and the
+  summary, both drawings and the model list narrow to it; pick it again to let go.
+- **Models**, the same ranking, one row each — where an Opus habit shows up.
+
+**Range** is 7, 30 or 90 days, or a pair of dates of your own, and it goes into the
+query string alongside the project — `?range=7d&project=…` — so a reload comes back
+to the same view, a bookmark keeps it, and Back walks the ranges as well as the
+selections. Ranges are whole local days, which is why the day count and the number of
+bars always agree. Ninety days is the ceiling; ask for more and the page reads ninety
+and says that it narrowed.
+
+Nothing on this page polls — a month of history does not move fast enough to be worth
+re-reading every two seconds — so **Refresh** is how you ask for another read.
+
+Two things it is honest about rather than quiet about: a project whose directory has
+since been moved or deleted cannot be resolved from the folder name Claude Code
+stores, so it shows the plainest reading of that name and may be wrong about the
+path; and the split by model covers every turn that named one, which on every
+transcript seen so far is all of them.
 
 ## On the page
 
@@ -392,6 +436,13 @@ transcripts on the development machine, and free once memoised.
 any single line it holds — the largest record on the development machine is 9.4 MB,
 and memory should be a property of the reader, not of the biggest tool output in the
 session. A 37 MB transcript answers in 99 ms; the slowest of all 795 is 140 ms.
+
+**The history page** adds no read of its own. It asks the same sweep for two things
+the limit cards throw away — which project billed each half hour, and which model —
+and the first costs nothing at all, since the sweep already walks `projects/<slug>/…`
+and knew the slug it was dropping. A 7-day page is ~450 ms cold and ~15 ms warm on
+the development machine, and the bucket cache is shared with the cards, so whichever
+you open second is the cheap one.
 
 **The limits** are the one read that has to cover weeks rather than a page, because
 the yardsticks they draw are the heaviest window of the last 7 days and the heaviest

@@ -247,6 +247,65 @@ describe('readUsageHistory', () => {
     deepStrictEqual(history.projects, []);
   });
 
+  it('keeps the half hours either side of midnight apart', async (t) => {
+    // The one test that guards the grain. Days on the page are *local* days, folded
+    // in the browser, which is only possible because nothing here folds them first:
+    // a reader that rolled its buckets up into days would have had to pick a
+    // timezone, and the only one it could pick is the wrong one.
+    const home = await claudeHome(t);
+    await home.transcript(APP, sessionId(1), [
+      assistantRecord({ id: 'msg_1', timestamp: iso('23:45'), usage: { output: 10 } }),
+      assistantRecord({
+        id: 'msg_2',
+        timestamp: `2026-01-06T00:15:00.000Z`,
+        usage: { output: 4 },
+      }),
+    ]);
+
+    const history = await readUsageHistory(
+      home.config,
+      cache(),
+      paths(),
+      { since: at('00:00'), until: at('23:30') + 2 * 60 * 60 * 1000 },
+      NOW,
+    );
+
+    deepStrictEqual(
+      history.buckets.map((bucket) => bucket.at),
+      [at('23:30'), Date.parse('2026-01-06T00:00:00.000Z')],
+    );
+    strictEqual(history.buckets[0]?.tokens.output, 10);
+    strictEqual(history.buckets[1]?.tokens.output, 4);
+  });
+
+  it('bills a subagent’s turns to the project that spawned it', async (t) => {
+    // True of the sweep, and worth asserting of the payload as well: a project's row
+    // is what someone reads, and a fan-out that billed elsewhere would understate it.
+    const home = await claudeHome(t);
+    await home.transcript(APP, sessionId(1), [
+      assistantRecord({ id: 'msg_1', timestamp: iso('09:05'), usage: { output: 10 } }),
+    ]);
+    await home.subagent(APP, sessionId(1), 'agent-writer', [
+      assistantRecord({
+        id: 'msg_2',
+        model: 'claude-sonnet-5',
+        timestamp: iso('09:07'),
+        usage: { output: 7 },
+      }),
+    ]);
+
+    const history = await readUsageHistory(home.config, cache(), paths(), RANGE, NOW);
+
+    strictEqual(history.projects.length, 1);
+    strictEqual(history.projects[0]?.tokens.output, 17);
+    strictEqual(history.projects[0]?.turns, 2);
+    // And the model it answered on is the subagent's own, not its parent's.
+    deepStrictEqual(
+      history.models.map((model) => model.model),
+      ['claude-opus-5', 'claude-sonnet-5'],
+    );
+  });
+
   it('reads a machine that has never run Claude Code as an empty range', async (t) => {
     const home = await claudeHome(t);
 

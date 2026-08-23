@@ -640,7 +640,7 @@ it loads on open and on a change of range, with a manual refresh.
   lands on tomorrow's midnight, so printing it directly named a day the range does
   not contain.
 
-### 7.6 — Tests and docs  *(~half a day)*
+### 7.6 — Tests and docs  *(~half a day)*  ✅ **DONE**
 
 `test/sources/claude-code/history.test.ts`, mirroring `src/` as everything in `test/`
 does, over real fixture files: two projects, two models, a subagent, a
@@ -649,10 +649,27 @@ one that catches a server that bucketed by day in UTC. A route test for the 404 
 no source can measure it. Then the README section and a screenshot pair, light and
 dark, beside the two already in `docs/`.
 
+- *Landed:* 26 tests across the sweep, the reader, the registry and the routes, plus
+  a README section, `docs/history-light.png` and `docs/history-dark.png`.
+- *The midnight test turned into a different test.* It was written to catch a server
+  that bucketed by day in UTC, and 7.2 made that unbuildable: the reader ships half
+  hours and folds no days at all. So it asserts the grain instead — a turn at 23:45
+  and one at 00:15 stay two buckets — which is the property the browser's local-day
+  folding actually depends on. `<synthetic>` is covered where it is decided, in
+  `buckets.test.ts`, rather than asserted twice.
+- *The screenshots are a 1440-wide page captured at 2×,* to match the 2880 × 2020 of
+  the two already there. The MCP browser runs at a device pixel ratio of 1, so the
+  viewport is doubled and `body { zoom: 2 }` puts the layout back — the same pixels a
+  retina capture would produce.
+
 ### Estimate
 
 **~3 days.** 7.1 carries the only real risk — a cache shape change and an attribution
 that must not quietly alter the limit cards — and 7.4 carries the most work.
+
+**All six phases are done.** The estimate held; 7.3 absorbed the two tables 7.4 had
+been holding, because a page shell with nothing in it cannot be reviewed. What is
+left is the one thing the reader cannot currently say — see below.
 
 ### Risks
 
@@ -662,3 +679,15 @@ that must not quietly alter the limit cards — and 7.4 carries the most work.
 | `byModel` grows every cached bucket | one small record per model *seen in that half hour* — in practice one, rarely two |
 | a machine with hundreds of projects | the project list is ranked and cut to the top N, with the tail summed into one `other` row |
 | per-day totals disagreeing with the limit cards | both read the same buckets from the same sweep; the only difference is where the edges fall, and the page says which |
+
+### What is left
+
+- **A moved project reads as a wrong path.** `resolveSlugPath` walks the filesystem to
+  settle an ambiguous slug, and a directory that no longer exists cannot be walked —
+  so the row shows the naive `-` → `/` reading. Four of the thirty-two projects on the
+  development machine are in that state. The fix is for the reader to say whether the
+  walk succeeded and for the page to mark the ones it could not find, rather than
+  presenting a guess as a location.
+- **The day arithmetic exists twice**, once in `app.js` and once in `history.js`. It
+  wants the same treatment `format.js` gave the formatters; it did not get it in 7.5
+  only because `app.js` was being edited elsewhere at the time.
