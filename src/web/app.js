@@ -472,17 +472,13 @@ function renderLimitCard(card, limit) {
   const share = limitShare(limit, current);
 
   setField(card, 'window', current ? windowRange(limit, current) : '');
-  setField(card, 'reset', current ? resetLine(limit, current) : '');
+  setField(card, 'reset', resetLine(limit, current));
 
   renderBar(card, share);
-
-  const stats = field(card, 'stats');
-  if (stats) stats.hidden = !current;
-  if (current) setField(card, 'used', formatCompactCount(billedTokens(current.tokens)));
-
+  setField(card, 'used', formatCompactCount(billedTokens(current?.tokens)));
   renderPace(card, limit, current);
 
-  setField(card, 'note', limitNote(limit, current, share));
+  setField(card, 'note', limitNote(limit, share));
 }
 
 /**
@@ -607,19 +603,36 @@ function windowRange(limit, current) {
   return `${formatClock(current.startedAt)} → ${formatClock(current.resetsAt)}`;
 }
 
-/** When it empties and how long that is — or, for a rolling week, that it does not. */
+/**
+ * When it empties and how long that is — or that there is nothing to empty.
+ *
+ * The idle case is said here rather than left blank. A card whose head, bar and
+ * stats all go quiet between windows reads as a card that failed to load, and the
+ * five-hour clock spends most of a day in exactly that state.
+ */
 function resetLine(limit, current) {
+  const week = limit.windowMs > DAY_MS;
+  if (!current) {
+    return week ? 'Nothing billed this week' : 'No window open · the next prompt starts one';
+  }
   // A rolling week ends at the instant it was measured, so there is no reset to name.
   if (limit.clock === 'rolling') return 'Rolling seven days · no reset reported';
-  const when = limit.windowMs > DAY_MS ? formatDayClock(current.resetsAt) : formatClock(current.resetsAt);
+  const when = week ? formatDayClock(current.resetsAt) : formatClock(current.resetsAt);
   return `Resets ${when} · ${formatClockSpan(current.resetsAt - Date.now())} left`;
 }
 
-/** How full the window in progress is, against the heaviest one on record. */
+/**
+ * How full the window in progress is, against the heaviest one on record.
+ *
+ * A window that has not opened yet reads as empty rather than as nothing at all:
+ * zero of the yardstick is a true answer, and the only one that leaves the card
+ * the same shape between windows instead of blanking it until the next prompt.
+ * Only a missing yardstick takes the bar away, because that is the case where
+ * there is genuinely no denominator to draw against.
+ */
 function limitShare(limit, current) {
-  const used = billedTokens(current?.tokens);
   const ceiling = billedTokens(limit.reference?.tokens);
-  return used && ceiling ? used / ceiling : undefined;
+  return ceiling ? billedTokens(current?.tokens) / ceiling : undefined;
 }
 
 /**
@@ -652,15 +665,12 @@ function limitLevel(share) {
  * which the reader has to be told, or the percentage reads as a quota it is not.
  * Everything past that sentence is detail the card is better off without.
  */
-function limitNote(limit, current, share) {
+function limitNote(limit, share) {
   const week = limit.windowMs > DAY_MS;
   const span = week ? 'week' : 'five-hour window';
   // Only worth saying when it is true: an anchored week names its own reset above.
   const guess = week && limit.clock === 'rolling' ? ' No reset reported, so it is counted back from now.' : '';
 
-  if (!current) {
-    return week ? 'Nothing billed this week.' : 'No window open — the next prompt starts one.';
-  }
   if (share === undefined) {
     return `No earlier ${span} in ${limit.historyDays} days to measure against.${guess}`;
   }
@@ -901,6 +911,9 @@ function markUsage(node, tokens, contextWindow) {
  */
 function formatShare(share) {
   const percent = share * 100;
+  // The exception the line above is about: nothing spent is the one case `0%` states
+  // exactly, and `0.0%` there reads as a rounding rather than as an empty window.
+  if (percent <= 0) return '0%';
   return percent >= 1 ? `${Math.floor(percent)}%` : `${percent.toFixed(1)}%`;
 }
 
