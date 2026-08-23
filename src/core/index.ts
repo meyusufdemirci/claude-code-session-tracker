@@ -7,6 +7,8 @@ export {
 export type { TrackerConfig } from '../config.ts';
 
 export type {
+  LongSessionsFinding,
+  ModelMixFinding,
   Session,
   SessionCounts,
   SessionDetail,
@@ -15,9 +17,18 @@ export type {
   SessionProject,
   SessionStatus,
   SessionTokenTotals,
+  StandingContextFinding,
+  UsageFinding,
+  UsageFindingKind,
+  UsageFindings,
   UsageLimits,
+  UsageProfile,
+  UsageProfileModel,
+  UsageProfileSession,
   UsageWindow,
 } from './types.ts';
+
+export { findUsage } from './advice.ts';
 
 export { SessionRegistry } from './registry.ts';
 export type { SessionListQuery, SessionListResult, SourceStatus } from './registry.ts';

@@ -234,3 +234,134 @@ export interface UsageLimits {
   weekly: UsageLimit;
   generatedAt: number;
 }
+
+/**
+ * One session, as a finding refers to it.
+ *
+ * Small on purpose: a finding names a session so the reader can open it, and the
+ * drawer is where everything else about it already lives. Nothing here needs a
+ * transcript opened — every field is a by-product of the sweep the limit cards and
+ * the history page already pay for.
+ */
+export interface UsageProfileSession {
+  id: string;
+  /** The folder under `~/.claude/projects` that billed it. */
+  slug: string;
+  /** Directory basename, e.g. `Timfog-FS`. */
+  project: string;
+  /** Assistant turns billed — turns, not records. */
+  turns: number;
+  /**
+   * The first turn's usage — what opening the session came to.
+   *
+   * Kept whole rather than summed, because the two halves mean different things: a
+   * fresh session writes its static block to cache and is billed for it, while a
+   * resumed one reads the same block back at a fraction of the price. Only the
+   * totals can tell those apart.
+   */
+  opening: SessionTokenTotals;
+  /**
+   * How much the model was holding on the session's last turn — input plus cache,
+   * which is the window as that turn saw it.
+   *
+   * Against the opening window it is the only honest way to say a session grew: a
+   * large closing window is ordinary work on a large codebase, whereas a large one
+   * that opened small is a session nobody let go of.
+   */
+  closingContext: number;
+  /** Billed usage across the session, as the limit cards define it — cache reads carried, not folded in. */
+  tokens: SessionTokenTotals;
+}
+
+/**
+ * One model's share of a profile's range.
+ *
+ * Shaped like the history page's own model row and deliberately not the same type:
+ * that one belongs to a question about where tokens went, this one to a question
+ * about what the spending looked like, and a source may well be able to answer one
+ * and not the other.
+ */
+export interface UsageProfileModel {
+  model: string;
+  tokens: SessionTokenTotals;
+  /** Assistant turns this model answered — turns, not records. */
+  turns: number;
+}
+
+/**
+ * How a stretch of spend was shaped, rather than how much of it there was.
+ *
+ * The input to `findUsage`, and a type of its own rather than a reading of some
+ * other one: where the tokens went is a question about projects and hours, while
+ * this asks what the spending looked like, which is a question about sessions. One
+ * sweep can answer both, and a source that can answer neither simply says nothing.
+ */
+export interface UsageProfile {
+  /** The range these were measured over. */
+  range: { since: number; until: number };
+  /** Every session that billed inside the range, heaviest first. */
+  sessions: UsageProfileSession[];
+  /** Every model's share of the range, heaviest first. */
+  models: UsageProfileModel[];
+  generatedAt: number;
+}
+
+/** Which reading of the range a finding is. */
+export type UsageFindingKind = 'long-sessions' | 'standing-context' | 'model-mix';
+
+/**
+ * One thing worth saying about a stretch of spend.
+ *
+ * Data, not prose. What a row says in English is a matter of how the page words
+ * things and belongs beside every other sentence on it; what is *true* is measured
+ * here and can be tested without a browser.
+ *
+ * Every finding is counted in billed tokens — input, output and newly-cached, the
+ * same definition the limit cards use — so `share` means one thing across all of
+ * them and the bars can be read against each other. Cache reads are what a long
+ * session actually spends most of, and they appear in the evidence a row shows
+ * rather than in its ranking, because they are not what the ceiling counts.
+ */
+export interface UsageFindingBase {
+  kind: UsageFindingKind;
+  /** Billed tokens this finding accounts for. Findings are ranked by it. */
+  tokens: number;
+  /** That, over every billed token in the range. */
+  share: number;
+}
+
+/** Sessions that were never let go of, and what they came to. */
+export interface LongSessionsFinding extends UsageFindingBase {
+  kind: 'long-sessions';
+  /** The ones over the threshold, heaviest first. */
+  sessions: UsageProfileSession[];
+  /** The closing window a session in this range typically reached. */
+  medianClosingContext: number;
+}
+
+/** What every session paid before anything was asked of it. */
+export interface StandingContextFinding extends UsageFindingBase {
+  kind: 'standing-context';
+  /** The opening window a session in this range typically started from. */
+  medianOpeningContext: number;
+  /** How many sessions paid it. */
+  sessions: number;
+}
+
+/** One model carrying the range more or less alone. */
+export interface ModelMixFinding extends UsageFindingBase {
+  kind: 'model-mix';
+  /** Every model in the range, heaviest first — the first is the one this is about. */
+  models: UsageProfileModel[];
+}
+
+export type UsageFinding = LongSessionsFinding | StandingContextFinding | ModelMixFinding;
+
+/** Everything the panel draws, and the range it was measured over. */
+export interface UsageFindings {
+  findings: UsageFinding[];
+  range: { since: number; until: number };
+  /** Billed tokens across the range — the denominator every `share` was taken against. */
+  tokens: number;
+  generatedAt: number;
+}
