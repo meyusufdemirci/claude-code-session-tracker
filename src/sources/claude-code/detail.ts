@@ -11,8 +11,8 @@ import type {
   SessionPromptUsage,
   SessionTokenTotals,
 } from '../../core/types.ts';
+import { buildContext, staticSliceOf, type StaticSlice } from './context.ts';
 import { readLines } from './lines.ts';
-import { contextWindowFor } from './models.ts';
 import { findCandidate, loadSession, promptText, type Candidate } from './transcripts.ts';
 import { addUsage } from './usage.ts';
 
@@ -105,6 +105,16 @@ async function scan(candidate: Candidate): Promise<Stats> {
   let lastTurnUsage: SessionTokenTotals | undefined;
   let lastModel: string | undefined;
 
+  /**
+   * The memory files and listings that went into the window before anything ran.
+   *
+   * Only the ones written *ahead of the first turn* belong to the static block —
+   * those are what its cache write paid for. Claude Code goes on emitting the same
+   * attachment types later, as the session reaches a directory with its own
+   * `CLAUDE.md`, and those are conversation growth rather than the standing cost.
+   */
+  const staticSlices: StaticSlice[] = [];
+
   // Every real user record opens a new bucket; the assistant turns that follow it,
   // up to the next one, are what it cost. Pushed to `promptUsage` as each closes.
   const promptUsage: SessionPromptUsage[] = [];
@@ -174,6 +184,13 @@ async function scan(candidate: Candidate): Promise<Stats> {
         }
         break;
 
+      case 'attachment': {
+        if (firstTurnUsage) break;
+        const slice = staticSliceOf(record.attachment);
+        if (slice) staticSlices.push(slice);
+        break;
+      }
+
       case 'system': {
         switch (str(record.subtype)) {
           case 'away_summary':
@@ -207,31 +224,12 @@ async function scan(candidate: Candidate): Promise<Stats> {
     ...(sawTurnDuration ? { activeMs } : {}),
     promptUsage,
     notes,
-    ...(lastTurnUsage ? { context: buildContext(firstTurnUsage, lastTurnUsage, lastModel) } : {}),
+    ...(lastTurnUsage ? { context: buildContext(firstTurnUsage, lastTurnUsage, lastModel, staticSlices) } : {}),
   };
 }
 
 function totalTokens(tokens: SessionTokenTotals): number {
   return tokens.input + tokens.output + tokens.cacheRead + tokens.cacheCreate;
-}
-
-function buildContext(
-  first: SessionTokenTotals | undefined,
-  last: SessionTokenTotals,
-  model: string | undefined,
-): SessionContextDetail {
-  const current = last.input + last.cacheRead + last.cacheCreate;
-  // Capped at `current`: a `/clear` or compaction partway through the transcript can
-  // leave the first turn's cache write larger than what the window holds now.
-  const staticTokens = Math.min(first?.cacheCreate ?? 0, current);
-  const conversationTokens = current - staticTokens;
-  const windowTokens = contextWindowFor(model);
-
-  return {
-    staticTokens,
-    conversationTokens,
-    ...(windowTokens !== undefined ? { windowTokens, freeTokens: Math.max(0, windowTokens - current) } : {}),
-  };
 }
 
 /**
@@ -284,6 +282,7 @@ interface Block {
 interface TranscriptRecord {
   type?: unknown;
   subtype?: unknown;
+  attachment?: unknown;
   content?: unknown;
   durationMs?: unknown;
   isMeta?: unknown;

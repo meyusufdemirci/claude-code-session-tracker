@@ -87,20 +87,54 @@ export interface SessionPromptUsage {
   tokens: SessionTokenTotals;
 }
 
+/** Where one row of the static block came from. */
+export type SessionContextPart =
+  /** A `CLAUDE.md` or `AGENTS.md` inlined before the first turn. */
+  | 'memory'
+  /** The skill listing. */
+  | 'skills'
+  /** The deferred-tool listing — names only, not the schemas behind them. */
+  | 'tools'
+  /** The sub-agent listing. */
+  | 'agents'
+  /** Instructions the MCP servers supplied. */
+  | 'mcp'
+  /** Everything the transcript never wrote down. Derived, not read. */
+  | 'rest';
+
+/**
+ * One row of what the static block is made of.
+ *
+ * Nothing on disk states a per-item token cost, so every `tokens` here bar `rest`'s
+ * is estimated from the recorded text. `rest` is the other way round: it is the
+ * measured static total minus everything we could name, which is why it is the row
+ * that carries the base system prompt and the built-in tool schemas.
+ */
+export interface SessionContextPartUsage {
+  part: SessionContextPart;
+  /** A memory file's path, or the name of the listing and how much it lists. */
+  label: string;
+  tokens: number;
+}
+
 /**
  * A snapshot of how full the context window is right now, unlike `tokens` on
  * `SessionDetail`, which sums every turn ever billed.
  *
- * Transcripts carry no per-category breakdown (no line tells us "this many tokens
- * were the system prompt"), so this only splits what the usage numbers actually
- * support: the first turn's cache write as a proxy for the static system prompt,
- * tools, skills, and agent definitions, versus what the window has grown by since.
+ * The usage numbers carry no per-category breakdown (no line tells us "this many
+ * tokens were the system prompt"), so the top-level split is only what they support:
+ * the first turn's cache write as a proxy for the static system prompt, tools,
+ * skills, and agent definitions, versus what the window has grown by since. What
+ * does get written down is the *text* of the memory files and listings that went in,
+ * and `staticParts` prices that text to say which of them the static half went on.
  */
 export interface SessionContextDetail {
   /** The first turn's cache-write — static system/tools/skills/agents, plus the opening prompt. */
   staticTokens: number;
   /** Grown since that first turn: later prompts, replies, and tool results still in view. */
   conversationTokens: number;
+  /** What `staticTokens` went on, largest first, with the unnamed remainder last. */
+  staticParts: SessionContextPartUsage[];
   /** The active model's context window, when the model is recognized. */
   windowTokens?: number;
   /** `windowTokens` minus the current total, when `windowTokens` is known. */

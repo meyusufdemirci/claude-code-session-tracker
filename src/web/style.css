@@ -599,6 +599,30 @@ body.drawer-open { overflow: hidden; }
 
 .context-note { margin: .6rem 0 0; font-size: .78rem; color: var(--ink-faint); }
 
+/* What the static block went on. One row per named block, remainder last. */
+.static-parts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .55rem; }
+
+.static-part-head { display: flex; align-items: baseline; gap: .8rem; margin-bottom: .25rem; }
+
+.static-part-label {
+  flex: 1;
+  min-width: 0;
+  font-size: .85rem;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.static-part-tokens { flex: none; font-size: .78rem; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+.static-part-bar { display: block; height: .3rem; border-radius: 999px; overflow: hidden; background: var(--rule); }
+.static-part-bar > span { display: block; height: 100%; background: var(--accent); }
+
+/* The remainder is the one row nobody can act on, so it recedes. */
+.static-part[data-part='rest'] .static-part-bar > span { background: var(--ink-faint); }
+.static-part[data-part='rest'] .static-part-label { color: var(--ink-faint); }
+
 /* One row per prompt, highest token usage first — the order the server sent them in. */
 .prompt-usage { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .5rem; }
 

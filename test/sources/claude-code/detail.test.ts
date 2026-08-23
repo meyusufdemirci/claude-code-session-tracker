@@ -6,8 +6,13 @@ import { readDetail } from '../../../src/sources/claude-code/detail.ts';
 import { claudeHome, sessionId, type ClaudeHome } from '../../helpers/claude-dir.ts';
 import { makeFile } from '../../helpers/temp.ts';
 import {
+  agentListingAttachment,
   assistantRecord,
+  deferredToolsAttachment,
+  mcpInstructionsAttachment,
+  memoryAttachment,
   record,
+  skillListingAttachment,
   systemRecord,
   titleRecord,
   toolResultRecord,
@@ -188,9 +193,107 @@ describe('readDetail', () => {
     deepStrictEqual((await detailOf(home))?.context, {
       staticTokens: 5_000,
       conversationTokens: 15_600,
+      // Nothing was recorded to name, so the whole block falls to the remainder.
+      staticParts: [{ part: 'rest', label: 'System prompt + tool schemas', tokens: 5_000 }],
       windowTokens: 1_000_000,
       freeTokens: 979_400,
     });
+  });
+
+  it('says what the static block went on, largest first', async (t) => {
+    // Nothing on disk prices these; each row is the recorded text divided by four,
+    // and the rest of the measured block is whatever the transcript never wrote.
+    const home = await claudeHome(t);
+    await home.transcript(CWD, ID, [
+      userRecord('the opening prompt'),
+      memoryAttachment('CLAUDE.md', 'm'.repeat(8_000)),
+      memoryAttachment('backend/CLAUDE.md', 'b'.repeat(4_000)),
+      skillListingAttachment('s'.repeat(2_000), ['commit', 'review']),
+      assistantRecord({ id: 'msg_1', model: 'claude-opus-5', usage: { cacheCreate: 10_000 } }),
+    ]);
+
+    const parts = (await detailOf(home))?.context?.staticParts;
+
+    deepStrictEqual(parts, [
+      { part: 'memory', label: 'CLAUDE.md', tokens: 2_000 },
+      { part: 'memory', label: 'backend/CLAUDE.md', tokens: 1_000 },
+      { part: 'skills', label: 'Skills (2)', tokens: 500 },
+      { part: 'rest', label: 'System prompt + tool schemas', tokens: 6_500 },
+    ]);
+  });
+
+  it('reads the listings the same way, whichever shape they arrive in', async (t) => {
+    // Three attachment types, three different keys for the same thing: a string, an
+    // array of lines, an array of blocks.
+    const home = await claudeHome(t);
+    await home.transcript(CWD, ID, [
+      deferredToolsAttachment(['aaa', 'bbb']),
+      agentListingAttachment(['c'.repeat(399)], ['Explore']),
+      mcpInstructionsAttachment(['d'.repeat(799)], ['github']),
+      assistantRecord({ id: 'msg_1', model: 'claude-opus-5', usage: { cacheCreate: 5_000 } }),
+    ]);
+
+    const parts = (await detailOf(home))?.context?.staticParts;
+
+    deepStrictEqual(parts?.slice(0, 3), [
+      { part: 'mcp', label: 'MCP instructions (1)', tokens: 200 },
+      { part: 'agents', label: 'Agent listing (1)', tokens: 100 },
+      // Two three-character names, each joined with a newline: eight characters.
+      { part: 'tools', label: 'Deferred tools (2)', tokens: 2 },
+    ]);
+  });
+
+  it('counts only the attachments that beat the first turn into the window', async (t) => {
+    // Claude Code keeps emitting these as the session reaches new directories, but a
+    // memory file pulled in on turn nine is conversation growth, not standing cost.
+    const home = await claudeHome(t);
+    await home.transcript(CWD, ID, [
+      memoryAttachment('CLAUDE.md', 'm'.repeat(4_000)),
+      assistantRecord({ id: 'msg_1', model: 'claude-opus-5', usage: { cacheCreate: 10_000 } }),
+      memoryAttachment('later/CLAUDE.md', 'l'.repeat(40_000)),
+      assistantRecord({ id: 'msg_2', model: 'claude-opus-5', usage: { cacheRead: 10_000, cacheCreate: 9_000 } }),
+    ]);
+
+    const parts = (await detailOf(home))?.context?.staticParts;
+
+    // The 40K file that arrived on turn two is nowhere here — and the remainder is
+    // last however large, being the row a reader can do nothing with.
+    deepStrictEqual(parts, [
+      { part: 'memory', label: 'CLAUDE.md', tokens: 1_000 },
+      { part: 'rest', label: 'System prompt + tool schemas', tokens: 9_000 },
+    ]);
+  });
+
+  it('scales the rows back rather than claim a block bigger than the one measured', async (t) => {
+    // Four characters to the token understates prose, so an estimate can outrun the
+    // measurement. Fitting it is honest; reporting 12K inside a 6K block is not.
+    const home = await claudeHome(t);
+    await home.transcript(CWD, ID, [
+      memoryAttachment('CLAUDE.md', 'm'.repeat(32_000)),
+      memoryAttachment('backend/CLAUDE.md', 'b'.repeat(16_000)),
+      assistantRecord({ id: 'msg_1', model: 'claude-opus-5', usage: { cacheCreate: 6_000 } }),
+    ]);
+
+    const parts = (await detailOf(home))?.context?.staticParts;
+
+    deepStrictEqual(parts, [
+      { part: 'memory', label: 'CLAUDE.md', tokens: 4_000 },
+      { part: 'memory', label: 'backend/CLAUDE.md', tokens: 2_000 },
+    ]);
+    strictEqual(parts?.some((entry) => entry.part === 'rest'), false, 'nothing left to attribute');
+  });
+
+  it('ignores the attachments that cost the window nothing', async (t) => {
+    const home = await claudeHome(t);
+    await home.transcript(CWD, ID, [
+      record({ type: 'attachment', attachment: { type: 'opened_file_in_ide', filename: 'a.ts' } }),
+      record({ type: 'attachment', attachment: { type: 'some_type_added_next_release', content: 'x'.repeat(400) } }),
+      assistantRecord({ id: 'msg_1', model: 'claude-opus-5', usage: { cacheCreate: 5_000 } }),
+    ]);
+
+    deepStrictEqual((await detailOf(home))?.context?.staticParts, [
+      { part: 'rest', label: 'System prompt + tool schemas', tokens: 5_000 },
+    ]);
   });
 
   it('never reports a static block larger than the window is holding', async (t) => {

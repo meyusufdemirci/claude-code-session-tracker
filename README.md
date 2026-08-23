@@ -46,6 +46,9 @@ else — and puts it on one page.
 - **A detail panel** per session: message and tool-call counts, token totals,
   elapsed and working time, subagent count, a copyable `claude --resume <id>`,
   and a button that shows the transcript in your file manager.
+- **What the static context went on** — which `CLAUDE.md`, the skill listing, the
+  agent listing, the MCP instructions — so the standing cost of every turn is
+  itemised rather than a single number you cannot act on.
 - **`--json`** for scripting, and an HTTP API if you would rather build your own.
 - **No dependencies, no install scripts, no network calls, no writes** to your
   Claude directory.

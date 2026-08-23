@@ -193,6 +193,67 @@ export function rejectionRecord(options: RejectionOptions = {}): string {
   });
 }
 
+/**
+ * An `attachment` record — what Claude Code stuffs into the window around the
+ * messages: memory files, the skill and agent listings, MCP instructions.
+ *
+ * The ones written before the first assistant turn are the static block, which is
+ * why the detail reader stops collecting them the moment a turn appears.
+ */
+export function attachmentRecord(attachment: Record<string, unknown>, options: CommonFields = {}): string {
+  return record({ type: 'attachment', ...common(options), attachment });
+}
+
+/**
+ * A `CLAUDE.md` or `AGENTS.md` pulled into the window.
+ *
+ * The payload sits one level deeper than every other attachment's: `content` is the
+ * memory *file*, and the markdown is that file's own `content`.
+ */
+export function memoryAttachment(displayPath: string, content: string, options: CommonFields = {}): string {
+  return attachmentRecord(
+    {
+      type: 'nested_memory',
+      path: `/Users/y/Work/app/${displayPath}`,
+      displayPath,
+      content: { type: 'Project', path: `/Users/y/Work/app/${displayPath}`, content, contentDiffersFromDisk: false },
+    },
+    options,
+  );
+}
+
+/** The skill listing: one line per skill, sent whether or not any are used. */
+export function skillListingAttachment(content: string, names: string[], options: CommonFields = {}): string {
+  return attachmentRecord(
+    { type: 'skill_listing', content, names, skillCount: names.length, isInitial: true },
+    options,
+  );
+}
+
+/** The deferred-tool listing. `addedLines` is the text; the schemas are not in it. */
+export function deferredToolsAttachment(names: string[], options: CommonFields = {}): string {
+  return attachmentRecord(
+    { type: 'deferred_tools_delta', addedNames: names, addedLines: names, removedNames: [], readdedNames: [] },
+    options,
+  );
+}
+
+/** The sub-agent listing: a description per agent type. */
+export function agentListingAttachment(lines: string[], types: string[], options: CommonFields = {}): string {
+  return attachmentRecord(
+    { type: 'agent_listing_delta', addedTypes: types, addedLines: lines, removedTypes: [], isInitial: true },
+    options,
+  );
+}
+
+/** Whatever the connected MCP servers said about how to use themselves. */
+export function mcpInstructionsAttachment(blocks: string[], names: string[], options: CommonFields = {}): string {
+  return attachmentRecord(
+    { type: 'mcp_instructions_delta', addedNames: names, addedBlocks: blocks, removedNames: [] },
+    options,
+  );
+}
+
 /** Any other record type, spelled out where a test needs one. */
 export function record(value: Record<string, unknown>): string {
   return JSON.stringify(value);

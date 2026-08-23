@@ -1053,6 +1053,7 @@ function fillPanel(detail) {
   setText('d-cache-create', formatCount(detail.tokens.cacheCreate));
 
   fillContext(detail.context, detail.model);
+  fillStaticParts(detail.context);
   fillPromptUsage(detail.promptUsage, detail.contextWindow);
 
   setText('d-models', detail.models.map(shortModel).join(', ') || shortModel(detail.model) || '—');
@@ -1111,6 +1112,74 @@ function fillContext(context, model) {
   setText('d-context-free', formatCount(freeTokens));
   const usedPct = Math.round((current / windowTokens) * 100);
   setText('d-context-note', `${usedPct}% of ${formatCompactCount(windowTokens)} tokens · ${shortModel(model) ?? 'model'}`);
+}
+
+/** What each part of the static block is called, for the row's tooltip. */
+const STATIC_PART_TITLES = {
+  memory: 'A memory file inlined before the first turn. Its size is the file, so trimming it is the one thing that moves this number.',
+  skills: 'The skill listing: one description per skill, sent whether or not any of them are used.',
+  tools: 'The deferred-tool listing — tool names only. Their schemas are fetched on demand and are not counted here.',
+  agents: 'The sub-agent listing: one description per agent type.',
+  mcp: 'Usage instructions supplied by the connected MCP servers.',
+  rest: 'What is left after everything the transcript names: the base system prompt and the built-in tool schemas, neither of which is written to disk.',
+};
+
+/**
+ * What the static half of the window went on, largest first.
+ *
+ * Every row bar the last is priced from text the transcript actually recorded, so
+ * the numbers are estimates and the note says so. The last row is the remainder —
+ * derived by subtraction, and the only one a reader cannot do anything about.
+ */
+function fillStaticParts(context) {
+  const section = byId('d-static-parts-section');
+  const list = byId('d-static-parts');
+  if (!section || !list) return;
+
+  const parts = context?.staticParts ?? [];
+  // One row is never a breakdown: with nothing recognized the whole block collapses
+  // to the remainder, which the Context window section already showed as Static.
+  section.hidden = parts.length < 2;
+  list.innerHTML = '';
+  if (section.hidden) return;
+
+  const total = context.staticTokens || 1;
+
+  for (const entry of parts) {
+    const item = document.createElement('li');
+    item.className = 'static-part';
+    item.dataset.part = entry.part;
+    item.title = STATIC_PART_TITLES[entry.part] ?? '';
+
+    const head = document.createElement('span');
+    head.className = 'static-part-head';
+
+    const label = document.createElement('span');
+    label.className = 'static-part-label';
+    label.textContent = entry.label;
+    // A path that outruns the row is ellipsized, so keep the whole of it in reach.
+    label.title = entry.label;
+
+    const tokens = document.createElement('span');
+    tokens.className = 'static-part-tokens mono';
+    tokens.textContent = `${formatCount(entry.tokens)} · ${formatShare(entry.tokens / total)}`;
+
+    head.append(label, tokens);
+
+    const bar = document.createElement('span');
+    bar.className = 'static-part-bar';
+    const fill = document.createElement('span');
+    fill.style.width = `${Math.min(100, (entry.tokens / total) * 100)}%`;
+    bar.append(fill);
+
+    item.append(head, bar);
+    list.append(item);
+  }
+
+  setText(
+    'd-static-parts-note',
+    `${formatCount(context.staticTokens)} tokens before the first turn ran. Sizes are estimated from the text each block put in the window.`,
+  );
 }
 
 /** Already sorted high to low by the server; the panel just lays it out. */
