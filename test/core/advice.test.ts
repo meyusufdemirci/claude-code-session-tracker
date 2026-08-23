@@ -1,7 +1,8 @@
 import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { findUsage } from '../../src/core/advice.ts';
+import { findUsage, measureSession } from '../../src/core/advice.ts';
 import type {
+  SessionDetail,
   SessionTokenTotals,
   UsageFinding,
   UsageFindingKind,
@@ -340,5 +341,72 @@ describe('findUsage — what reaches the panel', () => {
 
     ok(findings.length <= 3);
     ok(new Set(kinds(findings)).size === findings.length, 'and never the same row twice');
+  });
+});
+
+describe('measureSession', () => {
+  /** Only the fields `measureSession` reads; the rest of a detail is not its business. */
+  const detail = (parts: {
+    billed?: number;
+    subagents?: number;
+    cacheRead?: number;
+    staticTokens?: number;
+    noContext?: boolean;
+  } = {}): SessionDetail => {
+    const {
+      billed = 100,
+      subagents = 0,
+      cacheRead = 5_000_000,
+      staticTokens = 26_000,
+      noContext = false,
+    } = parts;
+    return {
+      // Two more assistant turns than billed ones, as a real transcript has: the
+      // notices Claude Code writes itself are turns that nobody paid for.
+      counts: { user: 40, assistant: billed + 2, billed, tool: 200, subagents },
+      tokens: totals({ input: 300, output: 90_000, cacheRead, cacheCreate: 120_000 }),
+      ...(noContext ? {} : { context: { staticTokens, conversationTokens: 400_000, staticParts: [] } }),
+    } as unknown as SessionDetail;
+  };
+
+  it('undoes the multiplication a turn count hides', () => {
+    // The reads are the window handed back once per turn, so the window an average
+    // turn worked inside is the one number the drawer cannot show on its own.
+    const cost = measureSession(detail({ billed: 100, cacheRead: 5_000_000 }));
+
+    ok(cost);
+    strictEqual(cost.turns, 100, 'the billed turns, not the two that billed nothing');
+    strictEqual(cost.reread, 5_000_000);
+    strictEqual(cost.perTurn, 50_000);
+  });
+
+  it('carries the static block, which every turn reads back too', () => {
+    strictEqual(measureSession(detail({ staticTokens: 26_000 }))?.staticTokens, 26_000);
+  });
+
+  it('leaves the static block off a session that recorded no context', () => {
+    const cost = measureSession(detail({ noContext: true }));
+
+    ok(cost);
+    strictEqual('staticTokens' in cost, false, 'never guessed at');
+  });
+
+  it('counts the subagents that bill here without appearing here', () => {
+    strictEqual(measureSession(detail({ subagents: 4 }))?.subagents, 4);
+  });
+
+  it('says nothing about a transcript that never billed a turn', () => {
+    // A per-turn figure over no turns is not zero, it is a division nobody asked for.
+    strictEqual(measureSession(detail({ billed: 0 })), undefined);
+  });
+
+  it('says nothing about a session whose window was never read back', () => {
+    strictEqual(measureSession(detail({ cacheRead: 0 })), undefined);
+  });
+
+  it('goes quiet on a detail that carries no counts at all', () => {
+    // A source reporting less than Claude Code's does is a quiet section, never a
+    // failed request — this runs inside the one that serves the panel.
+    strictEqual(measureSession({} as SessionDetail), undefined);
   });
 });

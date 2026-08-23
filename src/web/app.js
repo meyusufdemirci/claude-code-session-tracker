@@ -1173,6 +1173,7 @@ function fillPanel(detail) {
 
   fillContext(detail.context, detail.model);
   fillStaticParts(detail.context);
+  fillCost(detail.cost);
   fillPromptUsage(detail.promptUsage, detail.contextWindow);
 
   setText('d-models', detail.models.map(shortModel).join(', ') || shortModel(detail.model) || '—');
@@ -1231,6 +1232,48 @@ function fillContext(context, model) {
   setText('d-context-free', formatCount(freeTokens));
   const usedPct = Math.round((current / windowTokens) * 100);
   setText('d-context-note', `${usedPct}% of ${formatCompactCount(windowTokens)} tokens · ${shortModel(model) ?? 'model'}`);
+}
+
+/**
+ * Why the numbers above are the size they are.
+ *
+ * Everything here arrives measured; the section's whole job is to say the one thing
+ * the sums cannot say for themselves — that a turn is handed the entire window
+ * again, so the reads are that window multiplied by however many turns there were.
+ * A reader who has that has the only lever there is.
+ */
+function fillCost(cost) {
+  const section = byId('d-cost-section');
+  if (!section) return;
+
+  section.hidden = !cost;
+  if (!cost) return;
+
+  setText(
+    'd-cost-note',
+    `Its ${formatCount(cost.turns)} turns read ${formatCompactCount(cost.reread)} back out of cache ` +
+      `between them — the window it was working in, handed over again on every one. Those reads are ` +
+      `billed at a fraction of the rest, which is why they sit outside the totals above.`,
+  );
+
+  const lines = [
+    { label: 'The window an average turn held', value: formatCompactCount(cost.perTurn) },
+    ...(cost.staticTokens === undefined
+      ? []
+      : [{ label: 'Of it, static — read back every turn', value: formatCompactCount(cost.staticTokens) }]),
+    ...(cost.subagents === 0
+      ? []
+      : [{ label: 'Subagents, billed here but not shown', value: formatCount(cost.subagents) }]),
+  ];
+
+  byId('d-cost-lines')?.replaceChildren(
+    ...lines.map(({ label, value }) => {
+      const row = element('li', 'cost-line');
+      row.append(element('span', 'label', label));
+      row.append(element('span', 'value', value));
+      return row;
+    }),
+  );
 }
 
 /** What each part of the static block is called, for the row's tooltip. */

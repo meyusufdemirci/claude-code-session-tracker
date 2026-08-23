@@ -45,7 +45,22 @@ describe('readDetail', () => {
 
     const detail = await detailOf(home);
 
-    deepStrictEqual(detail?.counts, { user: 2, assistant: 2, tool: 3, subagents: 0 });
+    deepStrictEqual(detail?.counts, { user: 2, assistant: 2, billed: 2, tool: 3, subagents: 0 });
+  });
+
+  it('counts a turn as billed only when it carried usage of its own', async (t) => {
+    // The sweep behind the limit cards counts only these, so a session described in
+    // two places on one screen reports one size for itself rather than two.
+    const home = await claudeHome(t);
+    await home.transcript(CWD, sessionId(1), [
+      assistantRecord({ id: 'msg_1', usage: { output: 10 } }),
+      assistantRecord({ id: 'msg_2', noUsage: true }),
+    ]);
+
+    const detail = await detailOf(home);
+
+    strictEqual(detail?.counts.assistant, 2);
+    strictEqual(detail?.counts.billed, 1);
   });
 
   it('counts one assistant turn once, however many records wrote it', async (t) => {

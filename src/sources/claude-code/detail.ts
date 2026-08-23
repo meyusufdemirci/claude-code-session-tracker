@@ -74,7 +74,7 @@ interface Stats {
 }
 
 async function scan(candidate: Candidate): Promise<Stats> {
-  const counts: SessionCounts = { user: 0, assistant: 0, tool: 0, subagents: 0 };
+  const counts: SessionCounts = { user: 0, assistant: 0, billed: 0, tool: 0, subagents: 0 };
   const tokens: SessionTokenTotals = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 };
   // A Set keeps first-seen order, which is the order a reader expects: the model the
   // session opened with, then whatever it was switched to.
@@ -150,11 +150,15 @@ async function scan(candidate: Candidate): Promise<Stats> {
         const message = obj(record.message);
         if (!message) break;
 
+        const model = str(message.model);
         const turn = str(message.id);
         // An unidentified record cannot be folded into anything, so it stands alone.
         if (turn === undefined || turn !== previousTurn) {
           previousTurn = turn;
           counts.assistant += 1;
+          // The same test the bucket sweep applies, so the two readers of one session
+          // never put two different turn counts on the same screen.
+          if (obj(message.usage) && model !== SYNTHETIC_MODEL) counts.billed += 1;
           addUsage(tokens, obj(message.usage));
           if (currentPrompt) addUsage(currentPrompt.tokens, obj(message.usage));
 
@@ -164,7 +168,6 @@ async function scan(candidate: Candidate): Promise<Stats> {
           lastTurnUsage = turnUsage;
         }
 
-        const model = str(message.model);
         if (model && model !== SYNTHETIC_MODEL) {
           models.add(model);
           lastModel = model;

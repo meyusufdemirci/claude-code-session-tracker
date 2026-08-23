@@ -1,7 +1,7 @@
 import type { TrackerConfig } from '../config.ts';
 import { ClaudeCodeSource } from '../sources/claude-code/index.ts';
 import type { RecentSort, RecentWindow, SessionSource, UsageQuery } from '../sources/source.ts';
-import { findUsage } from './advice.ts';
+import { findUsage, measureSession } from './advice.ts';
 import type {
   Session,
   SessionDetail,
@@ -208,7 +208,11 @@ export class SessionRegistry {
       if (!detail) continue;
 
       const live = (await source.listLive()).find((session) => session.id === id);
-      return live ? { ...detail, ...live } : detail;
+      const merged = live ? { ...detail, ...live } : detail;
+      // Derived here for the same reason findings are: it is arithmetic over what a
+      // source reported, not something a source is in a position to know better.
+      const cost = measureSession(merged);
+      return cost ? { ...merged, cost } : merged;
     }
     return null;
   }

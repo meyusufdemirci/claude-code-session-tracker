@@ -945,3 +945,14 @@ kbd {
 }
 .advice-open:hover { text-decoration: underline; }
 .advice-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The drawer's version of a finding: no bar and no ranking — one session has nothing
+   to be ranked against — just the figures its sentence rests on, set against the
+   labels naming them. */
+.cost-lines { margin: .55rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .4rem; }
+.cost-line { display: flex; align-items: baseline; gap: .8rem; font-size: .8rem; }
+.cost-line .label { color: var(--ink-soft); }
+.cost-line .value { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+
+/* The drawer is a narrow column; the panel's measure would run past it. */
+.drawer .advice-note { margin-top: 0; max-width: none; }

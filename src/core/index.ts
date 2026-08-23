@@ -16,6 +16,7 @@ export type {
   SessionLiveInfo,
   SessionProject,
   SessionStatus,
+  SessionCost,
   SessionTokenTotals,
   StandingContextFinding,
   UsageFinding,
@@ -28,7 +29,7 @@ export type {
   UsageWindow,
 } from './types.ts';
 
-export { findUsage } from './advice.ts';
+export { findUsage, measureSession } from './advice.ts';
 
 export { SessionRegistry } from './registry.ts';
 export type { SessionListQuery, SessionListResult, SourceStatus } from './registry.ts';

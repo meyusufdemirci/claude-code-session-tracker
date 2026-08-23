@@ -1,6 +1,8 @@
 import type {
   LongSessionsFinding,
   ModelMixFinding,
+  SessionCost,
+  SessionDetail,
   SessionTokenTotals,
   StandingContextFinding,
   UsageFinding,
@@ -117,6 +119,38 @@ export function findUsage(profile: UsageProfile): UsageFindings {
     .slice(0, MAX_FINDINGS);
 
   return { findings, range: profile.range, tokens, generatedAt: profile.generatedAt };
+}
+
+/**
+ * What one session cost, from the numbers the drawer already has.
+ *
+ * The panel above is about a range and needs a sweep behind it; this needs nothing
+ * but the session it is describing, which is why it is arithmetic rather than a
+ * rule: there is no threshold to cross and nothing to compare against. Every
+ * session has an answer here, and the honest one is often "not much".
+ *
+ * Nothing is returned for a transcript with no billed turns. A per-turn figure over
+ * no turns is not zero, it is a division no one asked for.
+ *
+ * Every field is read as though it might be missing, because this runs over whatever
+ * a source handed back: a detail short of a count is a source that reports less than
+ * Claude Code's does, and the section going quiet is the right answer to that. It is
+ * never a reason to fail the request that carried it.
+ */
+export function measureSession(detail: SessionDetail): SessionCost | undefined {
+  // The billed ones, not every assistant turn: a turn that carried no usage read
+  // nothing back, and dividing by it would understate what the rest each held.
+  const turns = detail.counts?.billed ?? 0;
+  const reread = detail.tokens?.cacheRead ?? 0;
+  if (turns <= 0 || reread <= 0) return undefined;
+
+  return {
+    turns,
+    reread,
+    perTurn: Math.round(reread / turns),
+    ...(detail.context ? { staticTokens: detail.context.staticTokens } : {}),
+    subagents: detail.counts?.subagents ?? 0,
+  };
 }
 
 /**

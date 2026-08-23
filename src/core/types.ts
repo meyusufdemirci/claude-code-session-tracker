@@ -63,6 +63,15 @@ export interface SessionCounts {
   user: number;
   /** Assistant turns, not records — one turn is written as several records. */
   assistant: number;
+  /**
+   * Of those, the ones that were actually billed.
+   *
+   * Fewer than `assistant` by the turns that carried no `usage` and the notices
+   * Claude Code writes under its own stand-in model. Counted separately because the
+   * sweep behind the limit cards counts only these, and a session described in two
+   * places on one screen must not report two different sizes for itself.
+   */
+  billed: number;
   /** `tool_use` blocks across every turn. */
   tool: number;
   /** Transcripts under `<sessionId>/subagents/`. */
@@ -155,6 +164,14 @@ export interface SessionDetail extends Session {
   notes: SessionDetailNotes;
   /** Absent only when the transcript has no assistant turns to measure. */
   context?: SessionContextDetail;
+  /**
+   * What the session cost, undone from its totals.
+   *
+   * Filled above the source seam rather than by whoever read the transcript: it is
+   * arithmetic on the fields beside it and nothing a source knows better. A source
+   * that sets it anyway is simply overwritten.
+   */
+  cost?: SessionCost;
 }
 
 /**
@@ -429,4 +446,35 @@ export interface UsageFindings {
   /** Billed tokens across the range — the denominator every `share` was taken against. */
   tokens: number;
   generatedAt: number;
+}
+
+/**
+ * What one session's own numbers came to, said as a cost rather than a total.
+ *
+ * The drawer already reports the sums — tokens in and out, cache reads, how full
+ * the window is. What it cannot say from those alone is why they are the size they
+ * are, and the answer is nearly always the same one: a turn is handed the whole
+ * window again, so the reads are the window multiplied by however many turns there
+ * were. This is that multiplication, undone.
+ *
+ * Absent when a session has no turns to divide by, which is a transcript that never
+ * billed rather than one that cost nothing.
+ */
+export interface SessionCost {
+  /** Assistant turns — turns, not records. */
+  turns: number;
+  /** Cache reads across the session: the window, handed back once per turn. */
+  reread: number;
+  /** `reread` over `turns` — the window an average turn here was working inside. */
+  perTurn: number;
+  /**
+   * The static block, when the session recorded one.
+   *
+   * Paid once at the top and then read back on every turn after it, which is why it
+   * belongs in a section about what a turn costs rather than only in the one about
+   * what the window holds.
+   */
+  staticTokens?: number;
+  /** Sub-agent transcripts, which bill to this session without appearing inside it. */
+  subagents: number;
 }
