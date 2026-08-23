@@ -1,6 +1,6 @@
 /* Two palettes, one selector each.
-   The theme is resolved to a literal `light`/`dark` before first paint by the
-   inline script in the page head, so there is no `prefers-color-scheme` query
+   The theme is resolved to a literal `light`/`dark` before first paint by
+   `theme.js` in the page head, so there is no `prefers-color-scheme` query
    here — "system" is a stored preference, not a third set of colours.
    Colours are Anthropic's brand palette (anthropics/skills brand-guidelines):
    dark #141413, light #faf9f5, mid grey #b0aea5, light grey #e8e6dc, and the
@@ -771,3 +771,108 @@ kbd {
   color: var(--ink-faint);
   text-align: right;
 }
+
+/* A bar per local day, linear against the heaviest one — the drawing has to keep
+   the proportion the numbers have, so a heavy day really does flatten the rest. */
+.days { display: flex; align-items: flex-end; gap: 2px; }
+
+.day { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: .3rem; }
+
+.day-bar {
+  display: flex;
+  align-items: flex-end;
+  height: 8.5rem;
+  background: var(--zebra);
+  border-radius: 2px;
+}
+
+.day-bar > span {
+  display: block;
+  width: 100%;
+  min-height: 1px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+}
+
+/* A day Claude cut short. Marked under the bar rather than coloured into it: the
+   refusal is a fact about the day, not a quantity to compare with the others. */
+.day[data-limited] .day-bar { box-shadow: inset 0 -2px 0 var(--bad); }
+
+.day-label {
+  font-size: .6rem;
+  color: var(--ink-faint);
+  text-align: center;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Half hours across, weekdays down. Monday first, as a week of work reads. */
+.hours { display: flex; flex-direction: column; gap: 2px; min-width: 30rem; }
+
+.hours-row, .hours-axis { display: flex; align-items: center; gap: 2px; }
+
+.hours-day {
+  flex: 0 0 2.2rem;
+  font-size: .6rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.hours-cell {
+  flex: 1 1 0;
+  height: 1rem;
+  border-radius: 1px;
+  background: var(--rule);
+  background: color-mix(in srgb, var(--accent) calc(var(--fill, 0) * 100%), var(--rule));
+}
+
+.hours-tick {
+  flex: 1 1 0;
+  font-size: .58rem;
+  color: var(--ink-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
+/* Picking a project is a toggle, so the row that is in force has to look it. */
+.project-pick {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-pick:hover .project-name { color: var(--accent); }
+.project-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.grid tr[data-selected] { background: var(--zebra); box-shadow: inset 2px 0 0 var(--accent); }
+
+.selection {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .5rem .8rem;
+  font-size: .8rem;
+  color: var(--ink-soft);
+}
+
+.selection button {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: .72rem;
+  padding: .15rem .5rem;
+  cursor: pointer;
+}
+
+.selection button:hover { border-color: var(--accent); color: var(--accent); }
+.selection button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

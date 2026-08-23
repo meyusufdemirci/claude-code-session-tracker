@@ -565,7 +565,7 @@ before first paint, and there is one copy of it instead of two that can drift.
   row. The path underneath does, but the table should probably show the parent
   directory rather than leaning on it.
 
-### 7.4 — What is actually on it  *(~1 day)*
+### 7.4 — What is actually on it  *(~1 day)*  ✅ **DONE**
 
 Four reads, in the order the question gets asked. Every chart is hand-rolled SVG —
 the repo has no runtime dependency and this feature is not the reason to get one.
@@ -582,6 +582,35 @@ the repo has no runtime dependency and this feature is not the reason to get one
 The rules the rest of the tool keeps, kept here: billed is input + output + newly
 cached, cache reads are shown apart and never folded in, `<synthetic>` is not a
 model, and a range with nothing in it says so rather than drawing an empty axis.
+
+- *Landed:* the two drawings and the selection, with the tables from 7.3 now
+  answering to it. **No SVG in the end** — the bars are a flex row of divs with
+  percentage heights and the grid is 7 × 48 spans tinted by `color-mix`, which is
+  responsive, theme-aware and shorter than the `viewBox` arithmetic would have been.
+- *Verified in a browser against the real directory,* light and dark, no console
+  errors: 30 active days of 31 on the axis, the busiest half hours falling between
+  09:00 and 23:00 with Friday and Saturday nearly empty, and picking `iLS-FS` cutting
+  the page to 43,904,644 billed over 20 days — the same figure its own row shows.
+- *Four things the work forced:*
+  - **The summary has to sum the series, not the project list.** Picking one project
+    narrows the drawings but not the list — so a Billed figure taken off the list kept
+    reading 201M under a chart showing 43M. It now sums `buckets`, which is exactly
+    what is drawn, and the project tile says `1 of 32` rather than pretending the
+    other thirty-one stopped existing.
+  - **A day that billed nothing must draw no bar.** The one-pixel minimum that keeps
+    a small day visible was making every quiet day claim a hairline of spend — the
+    opposite claim, made in the same ink.
+  - **Two counts a day apart read as a bug.** A 30-day range touches 31 local days,
+    so the chart said `31 days` beside a range saying `30`. It counts active days now,
+    which is a fact worth having rather than an arithmetic apology.
+  - **A row's name does not identify it.** `Tivi/iOS` and `Apa/iOS` are both `iOS`, so
+    where a basename repeats the parent directory goes in front of it — and only there,
+    because most rows do not need it.
+- *Also:* the selection lives in the query string, so a reload keeps it, a bookmark
+  keeps it, and Back undoes it. Clicking the row already chosen lets go of it.
+- *Still open, from 7.2:* a project whose directory has moved cannot be walked back to
+  a path and shows the naive reading — `.../App/Store/Operator/aso/fe`. It needs the
+  reader to say whether the walk succeeded, which is a change in `history.ts`.
 
 ### 7.5 — Range, state, and the trip back  *(~half a day)*
 

@@ -87,10 +87,40 @@
           </dl>
         </section>
 
+        <p class="selection" id="selection" hidden>
+          <span>Showing <strong id="selection-name"></strong> only.</span>
+          <button type="button" id="selection-clear">Show every project</button>
+        </p>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Spend per day <span class="count" id="days-count"></span></h2>
+            <p class="hint">Billed tokens per local day. A mark under a bar is a turn Claude refused.</p>
+          </div>
+
+          <div class="days" id="days"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Hour of day</h2>
+            <p class="hint">
+              Every half hour of the range, laid over one week. Darker is heavier —
+              against the busiest half hour on the grid.
+            </p>
+          </div>
+
+          <!-- Forty-eight columns need more width than a phone has; the grid scrolls
+               inside the panel rather than making the page scroll sideways. -->
+          <div class="scroller">
+            <div class="hours" id="hours"></div>
+          </div>
+        </section>
+
         <section class="panel">
           <div class="panel-head">
             <h2>Projects <span class="count" id="projects-count"></span></h2>
-            <p class="hint">Ranked by billed tokens — input, output and newly cached.</p>
+            <p class="hint">Ranked by billed tokens. Pick one to narrow everything above.</p>
           </div>
 
           <p class="empty" id="projects-empty" hidden>Nothing billed in this range.</p>
