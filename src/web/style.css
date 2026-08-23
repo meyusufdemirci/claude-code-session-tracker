@@ -882,6 +882,37 @@ kbd {
 .selection button:hover { border-color: var(--accent); color: var(--accent); }
 .selection button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* A panel that opens. The head is the control, so it takes the whole width and the
+   pointer, and the marker the browser draws is dropped for one that turns: a
+   right-facing chevron shut, pointing down open, which says which way the panel
+   goes rather than that it is a list. */
+.fold-head { cursor: pointer; margin-bottom: 0; list-style: none; }
+.fold-head::-webkit-details-marker { display: none; }
+.fold-head:hover h2 { color: var(--ink-soft); }
+.fold-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The margin the head normally carries belongs to the gap above the rows, so it is
+   only there when there are rows: shut, the panel closes up to its own padding. */
+.fold[open] .fold-head { margin-bottom: .85rem; }
+
+/* Two borders of a square, turned: the corner they make is the chevron. Sized in
+   `em` so it tracks the heading it rides rather than the root. */
+.fold-mark {
+  display: inline-block;
+  width: .32em;
+  height: .32em;
+  margin-right: .55em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-.1em) rotate(-45deg);
+  transition: transform .18s ease;
+}
+.fold[open] .fold-mark { transform: translateY(-.15em) rotate(45deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .fold-mark { transition: none; }
+}
+
 /* One finding per row, ruled apart rather than boxed: they are one reading of one
    range, and a box around each would say they were separate things — the same
    argument the two limit cards settle with a rule between them. */

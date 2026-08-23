@@ -165,18 +165,24 @@
            a range with nothing unusual in it should cost the reader no attention.
            Rows are built in `app.js`, since how many there are is the finding's to say. -->
       <section class="panel" id="advice-panel" hidden>
-        <div class="panel-head">
-          <h2>Where it goes <span class="count" id="advice-count"></span></h2>
-          <p class="limits-reset" id="advice-range"></p>
-        </div>
+        <!-- Shut until it is asked for. The findings are a second reading of a range
+             the panels above have already reported; they earn their height when
+             someone goes looking, not on every load. The head stays out, so how many
+             there are and what they cover is legible without opening anything. -->
+        <details class="fold">
+          <summary class="panel-head fold-head">
+            <h2><span class="fold-mark" aria-hidden="true"></span>Where it goes <span class="count" id="advice-count"></span></h2>
+            <span class="limits-reset" id="advice-range"></span>
+          </summary>
 
-        <div class="advice" id="advice-rows"></div>
+          <div class="advice" id="advice-rows"></div>
 
-        <p class="limits-note">
-          Ranked by what each accounts for, and measured in the tokens a limit counts —
-          input, output and cache writes. A finding appears only where the range is
-          heavier than this machine's own middle, so an ordinary week leaves this off.
-        </p>
+          <p class="limits-note">
+            Ranked by what each accounts for, and measured in the tokens a limit counts —
+            input, output and cache writes. A finding appears only where the range is
+            heavier than this machine's own middle, so an ordinary week leaves this off.
+          </p>
+        </details>
       </section>
 
       <section class="panel" id="live-panel">
