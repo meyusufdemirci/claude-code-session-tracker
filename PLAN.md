@@ -612,13 +612,33 @@ model, and a range with nothing in it says so rather than drawing an empty axis.
   a path and shows the naive reading — `.../App/Store/Operator/aso/fe`. It needs the
   reader to say whether the walk succeeded, which is a change in `history.ts`.
 
-### 7.5 — Range, state, and the trip back  *(~half a day)*
+### 7.5 — Range, state, and the trip back  *(~half a day)*  ✅ **DONE**
 
 The Range control from the Recent table, reused: 7 / 30 / 90 days or a custom pair
 of dates, in the query string alongside the selected project — `?range=30d&project=…`
 — so a reload comes back to the same view and a bookmark keeps it. The page does not
 poll: history does not move fast enough to be worth re-reading every two seconds, so
 it loads on open and on a change of range, with a manual refresh.
+
+- *Landed:* the picker, the two date fields, Refresh, and `?range=&from=&to=&project=`
+  as one view — read back on load and on `popstate`, so Back walks the ranges as well
+  as the selections. Only what differs from the default is written, so a plain
+  `/history` stays a plain URL.
+- *Three things the work forced:*
+  - **A range has to be whole local days at both ends, including the open one.** The
+    presets already were; a custom range with one end empty was not, and the server's
+    own default resolves to an instant. Either way the chart drew a part-day column
+    that the day count did not include, and the two disagreed by one — `90 days` over
+    ninety-one columns. Both ends are filled in by the page now: today at one end, the
+    ninety-day ceiling at the other, and `30 days` really is thirty columns.
+  - **Switching to Custom must not fire a read.** With no dates yet it would ask for
+    everything on disk. The fields appear and nothing is re-read until a date lands.
+  - **The narrowing has to be said, not just returned.** The reply carries the range
+    it read, so a year asked for now prints `90 days · narrowed from what was asked
+    for` rather than quietly drawing three months under a year's worth of intent.
+- *Also:* the end of the range is labelled from `until - 1`. `until` is exclusive and
+  lands on tomorrow's midnight, so printing it directly named a day the range does
+  not contain.
 
 ### 7.6 — Tests and docs  *(~half a day)*
 

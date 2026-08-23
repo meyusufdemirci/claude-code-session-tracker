@@ -54,8 +54,36 @@
         <section class="panel" id="summary-panel">
           <div class="panel-head">
             <h2>Range</h2>
-            <p class="hint" id="range-line"></p>
+
+            <div class="filters">
+              <label class="field">
+                <span>Range</span>
+                <select id="range">
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                  <option value="90d">Last 90 days</option>
+                  <option value="custom">Custom…</option>
+                </select>
+              </label>
+
+              <!-- Revealed only by the Custom option; either end may be left empty. -->
+              <label class="field" id="from-field" hidden>
+                <span>From</span>
+                <input type="date" id="range-from" />
+              </label>
+              <label class="field" id="to-field" hidden>
+                <span>To</span>
+                <input type="date" id="range-to" />
+              </label>
+
+              <!-- The page does not poll, so re-reading is something you ask for. -->
+              <button type="button" class="reset" id="refresh" title="Read the transcripts again">
+                Refresh
+              </button>
+            </div>
           </div>
+
+          <p class="hint range-line" id="range-line"></p>
 
           <dl class="stats" id="summary">
             <div>

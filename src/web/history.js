@@ -41,16 +41,123 @@ const COLUMNS = 48;
  */
 const CELL_FLOOR = 0.14;
 
-function selectedProject() {
-  return new URLSearchParams(location.search).get('project') ?? undefined;
+/**
+ * The ranges the picker offers, in whole local days.
+ *
+ * Whole days, and `until` at tomorrow's midnight rather than at this instant, so
+ * that "last 30 days" draws thirty columns rather than thirty-one part-days — the
+ * range and the chart under it agree because they are the same days.
+ */
+const RANGES = {
+  '7d': () => lastDays(7),
+  '30d': () => lastDays(30),
+  '90d': () => lastDays(90),
+  custom: () => customRange(),
+};
+
+/** The last `count` local days, today included. */
+function lastDays(count) {
+  return { since: daysAgo(count - 1), until: nextDay(daysAgo(0)) };
+}
+
+/**
+ * Where the controls sit when nobody has touched them.
+ *
+ * Said once, because both the fallback for a hand-edited query string and the
+ * parameters `syncUrl` leaves out lean on it, and they would be a quiet bug apart.
+ */
+const DEFAULT_VIEW = { range: '30d', from: '', to: '' };
+
+const view = readView();
+
+/** A hand-edited or stale parameter falls back rather than leaving a state the controls cannot show. */
+function readView() {
+  const params = new URLSearchParams(location.search);
+  const range = params.get('range');
+
+  return {
+    range: range !== null && Object.hasOwn(RANGES, range) ? range : DEFAULT_VIEW.range,
+    from: params.get('from') ?? DEFAULT_VIEW.from,
+    to: params.get('to') ?? DEFAULT_VIEW.to,
+    project: params.get('project') ?? undefined,
+  };
+}
+
+/** Only what differs from the default, so a plain `/history` stays a plain URL. */
+function syncUrl(push) {
+  const url = new URL(location.href);
+  for (const [key, fallback] of Object.entries(DEFAULT_VIEW)) {
+    if (view[key] === fallback) url.searchParams.delete(key);
+    else url.searchParams.set(key, view[key]);
+  }
+  if (view.project === undefined) url.searchParams.delete('project');
+  else url.searchParams.set('project', view.project);
+
+  // Qualified: `history` is this file's word for a payload everywhere else.
+  if (push) window.history.pushState({}, '', url);
+  else window.history.replaceState({}, '', url);
+}
+
+/** Local midnight, `count` days back. */
+function daysAgo(count) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() - count);
+  return date.getTime();
+}
+
+function nextDay(at) {
+  const date = new Date(at);
+  date.setDate(date.getDate() + 1);
+  return date.getTime();
+}
+
+/**
+ * A custom range, with either end allowed to be empty.
+ *
+ * Both ends are filled in here rather than left to the server, so that a custom
+ * range is made of whole local days like every preset: an open end resolved to an
+ * instant would leave the chart drawing a part-day column that the day count does
+ * not include, and the two would disagree by one.
+ *
+ * An empty end means as far as this will read — today at one end, the ninety-day
+ * ceiling at the other.
+ */
+function customRange() {
+  let from = dayFromIso(view.from);
+  let to = dayFromIso(view.to);
+  // A backwards pair is a slip of the picker, not a request for nothing.
+  if (from !== undefined && to !== undefined && from > to) [from, to] = [to, from];
+
+  const until = to === undefined ? nextDay(daysAgo(0)) : nextDay(to);
+  return { since: from ?? shiftDays(until, -MAX_SPAN_DAYS), until };
+}
+
+/** The widest range the reader will read; asking for more is narrowed, and said so. */
+const MAX_SPAN_DAYS = 90;
+
+/** Stepped by date rather than by milliseconds, so a clock change is still one day. */
+function shiftDays(at, count) {
+  const date = new Date(at);
+  date.setDate(date.getDate() + count);
+  return date.getTime();
+}
+
+function dayFromIso(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? '');
+  if (!match) return undefined;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])).getTime();
 }
 
 async function load() {
   let history;
-  const project = selectedProject();
-  const query = project === undefined ? '' : `?project=${encodeURIComponent(project)}`;
+  const asked = RANGES[view.range]();
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(asked)) params.set(key, String(value));
+  if (view.project !== undefined) params.set('project', view.project);
+
   try {
-    const res = await fetch(`/api/usage/history${query}`);
+    const res = await fetch(`/api/usage/history?${params}`);
     // 404 is the honest answer from a machine no source can measure, not a failure:
     // the page says there is nothing rather than that something went wrong.
     if (res.status === 404) {
@@ -65,11 +172,12 @@ async function load() {
   }
 
   hideBanner();
-  render(history);
+  render(history, asked);
 }
 
-function render(history) {
+function render(history, asked) {
   byId('loading').hidden = true;
+  syncControls();
 
   if (history.projects.length === 0) {
     showEmpty(history);
@@ -79,7 +187,7 @@ function render(history) {
   byId('no-data').hidden = true;
   byId('content').hidden = false;
 
-  renderSummary(history);
+  renderSummary(history, asked);
   renderSelection(history);
   renderDays(history.buckets, history.range);
   renderHours(history.buckets);
@@ -120,10 +228,10 @@ function showEmpty(history) {
  * number that keeps its whole-range meaning, so when a project is picked it says
  * which of how many rather than pretending the others are gone.
  */
-function renderSummary(history) {
+function renderSummary(history, asked) {
   const totals = sumOf(history.buckets);
 
-  setText('range-line', rangeLine(history.range));
+  setText('range-line', rangeLine(history.range, asked));
   setText('s-billed', formatCount(billedTokens(totals.tokens)));
   setText('s-cache', formatCount(totals.tokens.cacheRead));
   setText('s-turns', formatCount(totals.turns));
@@ -353,12 +461,8 @@ function disambiguate(projects) {
  * dashboard's range and sort already follow.
  */
 function choose(slug) {
-  const url = new URL(location.href);
-  if (slug === undefined) url.searchParams.delete('project');
-  else url.searchParams.set('project', slug);
-
-  // Qualified: `history` is this file's word for a payload everywhere else.
-  window.history.pushState({}, '', url);
+  view.project = slug;
+  syncUrl(true);
   load();
 }
 
@@ -410,11 +514,67 @@ function sumOf(rows) {
   return { tokens, turns };
 }
 
-/** The range the server actually read, which is not always the one that was asked for. */
-function rangeLine(range) {
+/**
+ * The range the server actually read, and a word when that is not the one asked for.
+ *
+ * The reader is entitled to know they are looking at ninety days of a year they
+ * asked for. The server narrows rather than refuses — that is the right call for a
+ * read this expensive — but only if the page passes the fact on.
+ */
+function rangeLine(range, asked) {
   const days = Math.round((range.until - range.since) / 86_400_000);
-  return `${formatDay(range.since)} – ${formatDay(range.until)} · ${days} days`;
+  const line = `${formatDay(range.since)} – ${formatDay(range.until - 1)} · ${days} days`;
+  const narrowed = asked?.since !== undefined && range.since > asked.since;
+  return narrowed ? `${line} · narrowed from what was asked for` : line;
 }
+
+/* -------------------------------------------------------------- the controls */
+
+const rangeSelect = byId('range');
+const fromInput = byId('range-from');
+const toInput = byId('range-to');
+
+/** The controls follow the state, so a reload with `?range=90d` opens with the picker saying so. */
+function syncControls() {
+  rangeSelect.value = view.range;
+  fromInput.value = view.from;
+  toInput.value = view.to;
+  byId('from-field').hidden = view.range !== 'custom';
+  byId('to-field').hidden = view.range !== 'custom';
+}
+
+/**
+ * A change of range is a page state of its own, so it is pushed rather than replaced:
+ * Back returns to the range you were looking at, the same way it drops a selection.
+ */
+function changeRange(next) {
+  Object.assign(view, next);
+  syncControls();
+  syncUrl(true);
+  load();
+}
+
+rangeSelect.addEventListener('change', () => {
+  const range = rangeSelect.value;
+  // Switching to Custom with no dates yet would ask for everything on disk, so it
+  // waits for a date instead: the fields appear, and nothing is re-read until one lands.
+  if (range === 'custom' && !view.from && !view.to) {
+    Object.assign(view, { range });
+    syncControls();
+    syncUrl(true);
+    return;
+  }
+  changeRange({ range });
+});
+
+for (const input of [fromInput, toInput]) {
+  input.addEventListener('change', () => {
+    changeRange({ range: 'custom', from: fromInput.value, to: toInput.value });
+  });
+}
+
+// Reading again is something you ask for, since nothing here polls.
+byId('refresh').addEventListener('click', () => load());
 
 function showBanner(error) {
   byId('loading').hidden = true;
@@ -429,7 +589,13 @@ function hideBanner() {
 
 byId('selection-clear').addEventListener('click', () => choose(undefined));
 
-// Back and Forward move between selections, because each one is a real page state.
-addEventListener('popstate', () => load());
+// Back and Forward move between views, because each one is a real page state — so
+// the state has to be re-read from the URL rather than kept only in this module.
+addEventListener('popstate', () => {
+  Object.assign(view, readView());
+  syncControls();
+  load();
+});
 
+syncControls();
 load();
