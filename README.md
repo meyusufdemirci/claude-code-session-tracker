@@ -157,6 +157,7 @@ can do with `curl`:
 | `GET /api/sessions?sort=` | `recent` (the default), `tokens-desc`, or `tokens-asc`. Ranks the finished sessions across the whole window, not just the page. An unknown value falls back to `recent` |
 | `GET /api/sessions/:id` | One session with `counts`, `tokens`, `models`, `activeMs`, `awaySummary`, and `notes` |
 | `GET /api/limits` | Both limits, as `session` (five hours) and `weekly` (seven days). Each carries `windowMs`, `clock`, `historyDays`, the `current` window, the heaviest closed one as `reference`, and `lastLimited` if Claude ever cut one short. 404 when no source can measure them |
+| `GET /api/usage/history?since=&until=&project=` | Where the tokens went: a sparse half-hour series, every project in the range with its name and directory, and every model, each ranked by billed tokens. Epoch milliseconds again; `since` defaults to 30 days back, `until` to now, and a span wider than 90 days is narrowed — `range` in the reply is always the one actually read. `project` takes a slug from the same reply and narrows the series and the models to it, never the project list. 404 when no source can measure it |
 | `GET /api/health` | `ok`, the version, the Node it runs on, the resolved Claude directory, and per-source status |
 | `POST /api/sessions/:id/reveal` | Shows that transcript in your file manager. Requires a loopback `Origin` |
 

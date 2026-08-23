@@ -1,10 +1,12 @@
 import { access } from 'node:fs/promises';
 import type { TrackerConfig } from '../../config.ts';
 import { FileCache } from '../../core/cache.ts';
-import type { Session, SessionDetail, UsageLimits } from '../../core/types.ts';
-import type { RecentQuery, RecentSessions, SessionSource } from '../source.ts';
+import type { Session, SessionDetail, UsageHistory, UsageLimits } from '../../core/types.ts';
+import type { RecentQuery, RecentSessions, SessionSource, UsageQuery } from '../source.ts';
 import { readDetail } from './detail.ts';
-import { readUsageLimits, type UsageBucket } from './limits.ts';
+import { readUsageHistory } from './history.ts';
+import type { FileUsage } from './buckets.ts';
+import { readUsageLimits } from './limits.ts';
 import { listLiveSessions } from './live.ts';
 import { listRecentSessions } from './transcripts.ts';
 
@@ -34,9 +36,19 @@ export class ClaudeCodeSource implements SessionSource {
    * Separate from `#transcripts` because it answers a different question about the
    * same files — when the tokens were billed, not how many in total — and because it
    * covers subagent transcripts too, which are not sessions and so never appear there.
-   * One entry serves both limits: the same half hours are counted against both clocks.
+   * One entry serves every reading of the sweep: both limit clocks, and the history
+   * that asks the same half hours which project and which model they belonged to.
    */
-  readonly #buckets = new FileCache<UsageBucket[]>();
+  readonly #buckets = new FileCache<FileUsage>();
+
+  /**
+   * Project slug to the directory it was made from.
+   *
+   * Not a `FileCache`: there is no file to stamp it against. Decoding a slug is a
+   * filesystem walk and the answer cannot change while the process runs — a project
+   * that moves gets a new slug — so it is remembered outright.
+   */
+  readonly #projectPaths = new Map<string, string>();
 
   constructor(config: TrackerConfig) {
     this.#config = config;
@@ -65,5 +77,9 @@ export class ClaudeCodeSource implements SessionSource {
 
   async limits(): Promise<UsageLimits> {
     return readUsageLimits(this.#config, this.#buckets);
+  }
+
+  async usage(query: UsageQuery): Promise<UsageHistory> {
+    return readUsageHistory(this.#config, this.#buckets, this.#projectPaths, query);
   }
 }

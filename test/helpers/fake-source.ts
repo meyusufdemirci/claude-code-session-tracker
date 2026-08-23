@@ -1,5 +1,10 @@
-import type { Session, SessionDetail, UsageLimits } from '../../src/core/types.ts';
-import type { RecentQuery, RecentSessions, SessionSource } from '../../src/sources/source.ts';
+import type { Session, SessionDetail, UsageHistory, UsageLimits } from '../../src/core/types.ts';
+import type {
+  RecentQuery,
+  RecentSessions,
+  SessionSource,
+  UsageQuery,
+} from '../../src/sources/source.ts';
 
 /**
  * A source that answers from arrays instead of a disk.
@@ -18,6 +23,8 @@ export interface FakeSourceOptions {
   details?: Record<string, SessionDetail>;
   /** Left out entirely to model a source that cannot measure a rate-limit window. */
   limits?: UsageLimits;
+  /** Left out entirely to model a source that cannot say where the tokens went. */
+  usage?: UsageHistory;
 }
 
 export class FakeSource implements SessionSource {
@@ -25,6 +32,8 @@ export class FakeSource implements SessionSource {
   readonly label: string;
   /** Every `listRecent` call this source received, in order. */
   readonly queries: RecentQuery[] = [];
+  /** Every `usage` call it received, in order. */
+  readonly usageQueries: UsageQuery[] = [];
 
   readonly #available: boolean;
   readonly #live: Session[];
@@ -44,9 +53,17 @@ export class FakeSource implements SessionSource {
       const limits = options.limits;
       this.limits = async (): Promise<UsageLimits> => limits;
     }
+    if (options.usage) {
+      const usage = options.usage;
+      this.usage = async (query: UsageQuery): Promise<UsageHistory> => {
+        this.usageQueries.push(query);
+        return usage;
+      };
+    }
   }
 
   limits?: () => Promise<UsageLimits>;
+  usage?: (query: UsageQuery) => Promise<UsageHistory>;
 
   async isAvailable(): Promise<boolean> {
     return this.#available;

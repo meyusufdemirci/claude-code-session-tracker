@@ -681,7 +681,9 @@ body.drawer-open { overflow: hidden; }
    and a toggle cannot express it. `aria-pressed` says which one is in force. */
 .segmented { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
 
-.segmented button {
+/* Links share it with buttons, so moving between the two pages looks like the same
+   control as choosing a theme — because to the reader it is: one of these, not that. */
+.segmented button, .segmented a {
   padding: .22rem .5rem;
   border: 0;
   border-right: 1px solid var(--rule);
@@ -692,12 +694,15 @@ body.drawer-open { overflow: hidden; }
   letter-spacing: .1em;
   text-transform: uppercase;
   cursor: pointer;
+  text-decoration: none;
 }
 
-.segmented button:last-child { border-right: 0; }
-.segmented button:hover { color: var(--accent); }
-.segmented button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.segmented button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.segmented button:last-child, .segmented a:last-child { border-right: 0; }
+.segmented button:hover, .segmented a:hover { color: var(--accent); }
+.segmented button:focus-visible,
+.segmented a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.segmented button[aria-pressed="true"],
+.segmented a[aria-current="page"] { background: var(--accent); color: var(--surface); }
 
 /* ----------------------------------------------------------------- states */
 
@@ -753,3 +758,16 @@ kbd {
    "visible" is a browser heuristic. A plain `:focus` rule is not: clicking a row
    hands focus straight to the panel, so this only ever shows for the keyboard. */
 .grid tbody tr[data-id]:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ----------------------------------------------------------------- history */
+
+/* Cache reads sit beside billed tokens and outweigh them fifty to one, so they are
+   printed quieter: present for whoever wants them, never the number the eye lands on. */
+.grid .soft { color: var(--ink-faint); }
+
+.read-at {
+  margin: 0;
+  font-size: .72rem;
+  color: var(--ink-faint);
+  text-align: right;
+}

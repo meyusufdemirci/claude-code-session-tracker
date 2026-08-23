@@ -8,17 +8,9 @@
     <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%23141413"/><circle cx="16" cy="16" r="9" fill="none" stroke="%23d97757" stroke-width="2" opacity=".45"/><circle cx="16" cy="16" r="4" fill="%23d97757"/></svg>' />
     <link rel="stylesheet" href="/style.css" />
 
-    <!-- Resolve the theme before the first paint. Deferring this to app.js would
-         show a light page for a frame to everyone who chose dark. -->
-    <script>
-      (() => {
-        const stored = localStorage.getItem('cst-theme');
-        const choice = stored === 'light' || stored === 'dark' ? stored : 'system';
-        const dark = choice === 'dark'
-          || (choice === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-      })();
-    </script>
+    <!-- Not deferred, and not a module: the theme has to be resolved before the
+         first paint, or everyone who chose dark gets a frame of light. -->
+    <script src="/theme.js"></script>
   </head>
   <body>
     <header class="masthead">
@@ -27,6 +19,11 @@
         <h1>Sessions</h1>
       </div>
       <div class="masthead-side">
+        <nav class="segmented" aria-label="Views">
+          <a href="/" aria-current="page">Sessions</a>
+          <a href="/history">History</a>
+        </nav>
+
         <span class="live-badge" id="live-badge" data-state="pending" aria-live="polite">
           <span class="live-dot"></span>
           <span id="live-badge-text">Connecting</span>

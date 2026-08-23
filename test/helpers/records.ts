@@ -34,6 +34,8 @@ export interface AssistantOptions extends CommonFields {
   usage?: UsageCounts;
   /** Omits the `usage` object entirely, as a turn that recorded none would. */
   noUsage?: boolean;
+  /** Omits `message.model`, which the attribution readers must not invent one for. */
+  noModel?: boolean;
   /** How many `tool_use` blocks this record's content holds. */
   toolUses?: number;
   /** Assistant text, written as a `text` block beside any tool calls. */
@@ -49,6 +51,7 @@ export interface AssistantOptions extends CommonFields {
  */
 export function assistantRecord(options: AssistantOptions = {}): string {
   const { id = 'msg_1', model = 'claude-opus-5', usage = {}, noUsage = false } = options;
+  const { noModel = false } = options;
   const content: unknown[] = [];
   if (options.text) content.push({ type: 'text', text: options.text });
   for (let i = 0; i < (options.toolUses ?? 0); i += 1) {
@@ -61,7 +64,7 @@ export function assistantRecord(options: AssistantOptions = {}): string {
     message: {
       id,
       role: 'assistant',
-      model,
+      ...(noModel ? {} : { model }),
       ...(content.length > 0 ? { content } : {}),
       ...(noUsage ? {} : { usage: usageKeys(usage) }),
     },

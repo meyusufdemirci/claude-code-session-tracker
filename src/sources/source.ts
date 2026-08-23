@@ -1,4 +1,4 @@
-import type { Session, SessionDetail, UsageLimits } from '../core/types.ts';
+import type { Session, SessionDetail, UsageHistory, UsageLimits } from '../core/types.ts';
 
 export interface RecentSessions {
   sessions: Session[];
@@ -36,6 +36,22 @@ export interface RecentQuery extends RecentWindow {
 }
 
 /**
+ * What stretch of history to read, and whose.
+ *
+ * Both ends are optional and both are the caller's: a source fills in its own
+ * defaults and is free to narrow what it was asked for — which is why `UsageHistory`
+ * reports the range it actually read rather than assuming this one.
+ */
+export interface UsageQuery {
+  /** Inclusive. Left off, the source picks its own default depth. */
+  since?: number;
+  /** Exclusive. Left off, the range runs to now. */
+  until?: number;
+  /** Narrow the series to one project, by the slug the source itself reported. */
+  project?: string;
+}
+
+/**
  * The single seam the whole tool hangs off.
  *
  * Everything that knows how one agent CLI stores its sessions lives behind this
@@ -67,4 +83,14 @@ export interface SessionSource {
    * not implement this is not broken — the page just leaves the cards off.
    */
   limits?(): Promise<UsageLimits>;
+
+  /**
+   * Where this CLI's tokens went over a stretch of history.
+   *
+   * Optional for the same reason `limits` is, and true of the same sources: it is a
+   * claim about billing, and a CLI that leaves no usage on disk cannot make one. A
+   * source that implements `limits` can almost always implement this too — they are
+   * two readings of one sweep — but nothing here requires it.
+   */
+  usage?(query: UsageQuery): Promise<UsageHistory>;
 }

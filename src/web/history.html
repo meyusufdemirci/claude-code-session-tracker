@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Claude Code history</title>
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%23141413"/><circle cx="16" cy="16" r="9" fill="none" stroke="%23d97757" stroke-width="2" opacity=".45"/><circle cx="16" cy="16" r="4" fill="%23d97757"/></svg>' />
+    <link rel="stylesheet" href="/style.css" />
+
+    <!-- Not deferred, and not a module: the theme has to be resolved before the
+         first paint, or everyone who chose dark gets a frame of light. -->
+    <script src="/theme.js"></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Claude Code</p>
+        <h1>History</h1>
+      </div>
+      <div class="masthead-side">
+        <nav class="segmented" aria-label="Views">
+          <a href="/">Sessions</a>
+          <a href="/history" aria-current="page">History</a>
+        </nav>
+
+        <div class="segmented" id="theme" role="group" aria-label="Colour theme">
+          <button type="button" data-theme-choice="system" aria-pressed="false">Auto</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+    </header>
+
+    <p class="banner" id="banner" role="alert" hidden>
+      <span id="banner-text"></span>
+      <span class="hint" id="banner-hint"></span>
+    </p>
+
+    <main>
+      <!-- Every section waits behind this one: there is nothing to draw until the
+           first read comes back, and a page of empty axes is worse than a sentence. -->
+      <p class="empty" id="loading">Reading transcripts…</p>
+
+      <section class="panel notice" id="no-data" hidden>
+        <h2>Nothing billed yet</h2>
+        <p>
+          No turn in this range was billed to a window, so there is nothing to
+          break down. The moment Claude answers a prompt, this fills in.
+        </p>
+      </section>
+
+      <div id="content" hidden>
+        <section class="panel" id="summary-panel">
+          <div class="panel-head">
+            <h2>Range</h2>
+            <p class="hint" id="range-line"></p>
+          </div>
+
+          <dl class="stats" id="summary">
+            <div>
+              <dt>Billed</dt>
+              <dd id="s-billed">—</dd>
+            </div>
+            <div>
+              <dt title="Read back from the cache. Billed at a fraction of the rest, and shown apart for that reason.">
+                Cache reads
+              </dt>
+              <dd id="s-cache">—</dd>
+            </div>
+            <div>
+              <dt>Turns</dt>
+              <dd id="s-turns">—</dd>
+            </div>
+            <div>
+              <dt>Projects</dt>
+              <dd id="s-projects">—</dd>
+            </div>
+            <div>
+              <dt>Models</dt>
+              <dd id="s-models">—</dd>
+            </div>
+            <div>
+              <dt>Busiest day</dt>
+              <dd id="s-busiest">—</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Projects <span class="count" id="projects-count"></span></h2>
+            <p class="hint">Ranked by billed tokens — input, output and newly cached.</p>
+          </div>
+
+          <p class="empty" id="projects-empty" hidden>Nothing billed in this range.</p>
+
+          <div class="scroller" id="projects-wrap" hidden>
+            <table class="grid">
+              <thead>
+                <tr>
+                  <th scope="col">Project</th>
+                  <th scope="col" class="num">Turns</th>
+                  <th scope="col" class="num">Billed</th>
+                  <th scope="col" class="num">Cache reads</th>
+                  <th scope="col" class="num">Share</th>
+                </tr>
+              </thead>
+              <tbody id="projects-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Models <span class="count" id="models-count"></span></h2>
+            <p class="hint">Every model that answered in this range.</p>
+          </div>
+
+          <p class="empty" id="models-empty" hidden>Nothing billed in this range.</p>
+
+          <div class="scroller" id="models-wrap" hidden>
+            <table class="grid">
+              <thead>
+                <tr>
+                  <th scope="col">Model</th>
+                  <th scope="col" class="num">Turns</th>
+                  <th scope="col" class="num">Billed</th>
+                  <th scope="col" class="num">Cache reads</th>
+                  <th scope="col" class="num">Share</th>
+                </tr>
+              </thead>
+              <tbody id="models-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <p class="read-at" id="read-at"></p>
+      </div>
+    </main>
+
+    <script type="module" src="/history.js"></script>
+  </body>
+</html>

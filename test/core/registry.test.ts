@@ -2,7 +2,7 @@ import { deepStrictEqual, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createConfig } from '../../src/config.ts';
 import { clampLimit, parseSort, SessionRegistry } from '../../src/core/registry.ts';
-import type { SessionDetail, UsageLimits } from '../../src/core/types.ts';
+import type { SessionDetail, UsageHistory, UsageLimits } from '../../src/core/types.ts';
 import { endedSession, FakeSource, liveSession } from '../helpers/fake-source.ts';
 
 const config = createConfig({ claudeDir: '/nowhere' });
@@ -182,6 +182,42 @@ describe('SessionRegistry.list', () => {
     deepStrictEqual(sessions, []);
     deepStrictEqual(sources, [{ id: 'gone', label: 'Fake', available: false }]);
     strictEqual(missing.queries.length, 0);
+  });
+});
+
+describe('SessionRegistry.usage', () => {
+  const usage: UsageHistory = {
+    range: { since: 1_000, until: 2_000 },
+    bucketMs: 1_800_000,
+    buckets: [],
+    projects: [],
+    models: [],
+    generatedAt: 2_000,
+  };
+
+  it('answers from the first source that can say where the tokens went', async () => {
+    const cannot = new FakeSource({ id: 'cannot' });
+    const can = new FakeSource({ id: 'can', usage });
+
+    deepStrictEqual(await registryOf(cannot, can).usage({}), usage);
+  });
+
+  it('hands the query on untouched', async () => {
+    const can = new FakeSource({ id: 'can', usage });
+
+    await registryOf(can).usage({ since: 1_000, project: '-Users-y-Work-app' });
+
+    deepStrictEqual(can.usageQueries, [{ since: 1_000, project: '-Users-y-Work-app' }]);
+  });
+
+  it('skips a source that is not available', async () => {
+    const absent = new FakeSource({ id: 'absent', available: false, usage });
+
+    strictEqual(await registryOf(absent).usage({}), null);
+  });
+
+  it('says nobody can when no source implements it', async () => {
+    strictEqual(await registryOf(new FakeSource()).usage({}), null);
   });
 });
 

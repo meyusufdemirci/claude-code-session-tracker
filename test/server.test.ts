@@ -1,7 +1,7 @@
-import { ok, rejects, strictEqual } from 'node:assert/strict';
+import { deepStrictEqual, ok, rejects, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createConfig } from '../src/config.ts';
-import type { SessionDetail, UsageLimits } from '../src/core/types.ts';
+import type { SessionDetail, UsageHistory, UsageLimits } from '../src/core/types.ts';
 import { createServer, listen } from '../src/server.ts';
 import { SessionRegistry } from '../src/core/registry.ts';
 import { endedSession, FakeSource, liveSession } from './helpers/fake-source.ts';
@@ -168,6 +168,71 @@ describe('GET /api/limits', () => {
   });
 });
 
+describe('GET /api/usage/history', () => {
+  const usage: UsageHistory = {
+    range: { since: 1_000, until: 2_000 },
+    bucketMs: 1_800_000,
+    buckets: [{ at: 1_000, tokens: { input: 1, output: 2, cacheRead: 3, cacheCreate: 4 }, turns: 1, limited: false }],
+    projects: [
+      {
+        slug: '-Users-y-Work-app',
+        name: 'app',
+        path: '/Users/y/Work/app',
+        tokens: { input: 1, output: 2, cacheRead: 3, cacheCreate: 4 },
+        turns: 1,
+      },
+    ],
+    models: [
+      { model: 'claude-opus-5', tokens: { input: 1, output: 2, cacheRead: 3, cacheCreate: 4 }, turns: 1 },
+    ],
+    generatedAt: 2_000,
+  };
+
+  it('returns what the source read', async (t) => {
+    const server = await startServer(t, [new FakeSource({ usage })]);
+
+    const res = await server.fetch('/api/usage/history');
+
+    strictEqual(res.status, 200);
+    strictEqual((res.json() as UsageHistory).projects[0]?.name, 'app');
+  });
+
+  it('reads the range and the project off the query string', async (t) => {
+    const measuring = new FakeSource({ usage });
+    const server = await startServer(t, [measuring]);
+
+    await server.fetch('/api/usage/history?since=1000&until=2000&project=-Users-y-Work-app');
+
+    deepStrictEqual(measuring.usageQueries.at(-1), {
+      since: 1_000,
+      until: 2_000,
+      project: '-Users-y-Work-app',
+    });
+  });
+
+  it('passes on the ends it was not given rather than inventing them', async (t) => {
+    // The source owns the defaults — it is the one that knows what it can afford to read.
+    const measuring = new FakeSource({ usage });
+    const server = await startServer(t, [measuring]);
+
+    await server.fetch('/api/usage/history');
+
+    deepStrictEqual(measuring.usageQueries.at(-1), {
+      since: undefined,
+      until: undefined,
+      project: undefined,
+    });
+  });
+
+  it('404s when no source can say', async (t) => {
+    const server = await startServer(t, [source()]);
+
+    const res = await server.fetch('/api/usage/history');
+
+    strictEqual(res.status, 404);
+  });
+});
+
 describe('the loopback guard', () => {
   it('answers a request addressed to a loopback host', async (t) => {
     const server = await startServer(t, [source()]);
@@ -243,6 +308,32 @@ describe('static assets', () => {
     strictEqual(res.status, 200);
     strictEqual(res.headers['content-type'], 'text/html; charset=utf-8');
     ok(res.body.includes('<!doctype html>') || res.body.includes('<!DOCTYPE html>'));
+  });
+
+  it('serves the history page at /history', async (t) => {
+    // A named route rather than an extension guess, so this is the whole of what
+    // makes an extensionless path work.
+    const server = await startServer(t, [source()]);
+
+    const res = await server.fetch('/history');
+
+    strictEqual(res.status, 200);
+    strictEqual(res.headers['content-type'], 'text/html; charset=utf-8');
+    ok(res.body.includes('/history.js'));
+  });
+
+  it('serves the assets both pages share', async (t) => {
+    const server = await startServer(t, [source()]);
+
+    for (const path of ['/style.css', '/theme.js', '/format.js']) {
+      strictEqual((await server.fetch(path)).status, 200, `expected ${path} to be served`);
+    }
+  });
+
+  it('does not invent a page for any other extensionless path', async (t) => {
+    const server = await startServer(t, [source()]);
+
+    strictEqual((await server.fetch('/sessions')).status, 404);
   });
 
   it('will not serve a file from outside the web directory', async (t) => {

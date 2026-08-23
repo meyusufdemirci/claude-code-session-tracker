@@ -3,9 +3,10 @@ import { describe, it } from 'node:test';
 import { FileCache } from '../../../src/core/cache.ts';
 import {
   billedTokens,
-  readUsageLimits,
+  type FileUsage,
   type UsageBucket,
-} from '../../../src/sources/claude-code/limits.ts';
+} from '../../../src/sources/claude-code/buckets.ts';
+import { readUsageLimits } from '../../../src/sources/claude-code/limits.ts';
 import { claudeHome, sessionId } from '../../helpers/claude-dir.ts';
 import { assistantRecord, rejectionRecord, userRecord } from '../../helpers/records.ts';
 
@@ -26,7 +27,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEK_MS = 7 * DAY_MS;
 const isoAt = (ms: number): string => new Date(ms).toISOString();
 
-const cache = (): FileCache<UsageBucket[]> => new FileCache<UsageBucket[]>();
+const cache = (): FileCache<FileUsage> => new FileCache<FileUsage>();
 
 describe('readUsageLimits', () => {
   it('floors a window to the half hour below its first turn', async (t) => {

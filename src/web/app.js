@@ -1,3 +1,13 @@
+import {
+  formatAgo,
+  formatClock,
+  formatCompactCount,
+  formatCount,
+  formatDay,
+  formatShare,
+  formatStamp,
+} from './format.js';
+
 /** How often we ask the server for the session list. Phase 5 may replace this with SSE. */
 const SESSIONS_INTERVAL_MS = 2000;
 const HEALTH_INTERVAL_MS = 15000;
@@ -748,14 +758,6 @@ function formatClockSpan(ms) {
 }
 
 /** How long ago, in one short phrase. Coarse on purpose: `3d ago`, not `3d 04h`. */
-function formatAgo(at) {
-  const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000));
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
-}
-
 /** Relative while it is still news, then a plain date — a week of `d ago` is enough. */
 function formatWhen(at) {
   if (!at) return '—';
@@ -768,16 +770,6 @@ function formatWhen(at) {
     month: 'short',
     ...(sameYear ? {} : { year: 'numeric' }),
   });
-}
-
-/** Clock time alone: a window's start and its reset are both today or tomorrow. */
-function formatClock(at) {
-  return new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-}
-
-/** `19 Aug` — enough to place a window in the week behind you. */
-function formatDay(at) {
-  return new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
 /** `Tue 19 Aug, 3:00 AM` — a reset days out needs the day as well as the hour. */
@@ -836,20 +828,6 @@ function totalTokens(session) {
   return session.tokens ? session.tokens.input + session.tokens.output : 0;
 }
 
-/** Thousands separators, in the reader's own locale. */
-function formatCount(value) {
-  return typeof value === 'number' ? value.toLocaleString() : '—';
-}
-
-/** `12.3K`, `4.1M` — a table cell has no room for a comma-grouped count. */
-function formatCompactCount(value) {
-  return compactCountFormat.format(value);
-}
-const compactCountFormat = new Intl.NumberFormat(undefined, {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
-
 /** One cell for all three totals, since a row has room for a phrase but not three columns. */
 function formatTokens(tokens) {
   if (!tokens) return '—';
@@ -903,20 +881,6 @@ function markUsage(node, tokens, contextWindow) {
   else node.removeAttribute('data-usage');
 }
 
-/**
- * A share as a whole percent, except near zero, where `0%` would read as none at all.
- *
- * Rounded down, not to nearest, so the number stays on the same side of the colour
- * thresholds as the cell it explains — 19.96% is orange, and must not say `20%`.
- */
-function formatShare(share) {
-  const percent = share * 100;
-  // The exception the line above is about: nothing spent is the one case `0%` states
-  // exactly, and `0.0%` there reads as a rounding rather than as an empty window.
-  if (percent <= 0) return '0%';
-  return percent >= 1 ? `${Math.floor(percent)}%` : `${percent.toFixed(1)}%`;
-}
-
 /** A duration in prose: `2h 14m`, `9m 12s`, `41s`. Unlike uptime this never ticks. */
 function formatSpan(ms) {
   if (!Number.isFinite(ms) || ms <= 0) return '—';
@@ -930,14 +894,6 @@ function formatSpan(ms) {
   if (h) return `${h}h ${m}m`;
   if (m) return `${m}m ${s}s`;
   return `${s}s`;
-}
-
-/**
- * An absolute moment, because the panel is where you check exactly when — with the
- * relative half after it, because that is the part you read without doing sums.
- */
-function formatStamp(at) {
-  return at ? `${new Date(at).toLocaleString()} · ${formatAgo(at)}` : '—';
 }
 
 /* ------------------------------------------------------------------- panel */
@@ -1239,45 +1195,6 @@ function fillPrompt(wrapId, textId, value) {
   if (value) byId(textId).textContent = value;
 }
 
-/* ------------------------------------------------------------------- theme */
-
-const THEME_KEY = 'cst-theme';
-const THEME_CHOICES = new Set(['system', 'light', 'dark']);
-/** The same query the inline script in the page head consults before first paint. */
-const darkMedia = matchMedia('(prefers-color-scheme: dark)');
-
-/**
- * Storage is wrapped because a browser is allowed to refuse it — a private window,
- * a blocked-cookies setting. Losing the preference is survivable; a page that fails
- * to boot over it is not.
- */
-function readTheme() {
-  try {
-    const stored = localStorage.getItem(THEME_KEY);
-    return THEME_CHOICES.has(stored) ? stored : 'system';
-  } catch {
-    return 'system';
-  }
-}
-
-function storeTheme(choice) {
-  try {
-    // Following the OS is the absence of a preference, so it is stored as one.
-    if (choice === 'system') localStorage.removeItem(THEME_KEY);
-    else localStorage.setItem(THEME_KEY, choice);
-  } catch {
-    // Then it lasts for this page view only.
-  }
-}
-
-function applyTheme(choice) {
-  const dark = choice === 'dark' || (choice === 'system' && darkMedia.matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-  for (const button of document.querySelectorAll('[data-theme-choice]')) {
-    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === choice));
-  }
-}
-
 /* ---------------------------------------------------------------- keyboard */
 
 /** Both tables walk as one list, because that is how the page reads. */
@@ -1520,20 +1437,6 @@ byId('drawer')?.addEventListener('keydown', (event) => {
   }
 });
 
-for (const button of document.querySelectorAll('[data-theme-choice]')) {
-  button.addEventListener('click', () => {
-    const choice = button.dataset.themeChoice;
-    storeTheme(choice);
-    applyTheme(choice);
-  });
-}
-
-// Only meaningful while following the OS, but the listener costs nothing either way.
-darkMedia.addEventListener('change', () => {
-  if (readTheme() === 'system') applyTheme('system');
-});
-
-applyTheme(readTheme());
 // The controls follow the state rather than the other way round, so a reload with
 // `?range=7d&sort=tokens-desc` opens with the picker already saying so.
 syncControls();

@@ -236,6 +236,71 @@ export interface UsageLimits {
 }
 
 /**
+ * One half hour of the history series.
+ *
+ * The grain the transcripts are read at, kept as-is on the wire rather than folded
+ * into days here: a day is a *local* day, and the server has no business guessing
+ * which timezone the reader is in. Sparse — a half hour with no usage does not exist.
+ */
+export interface UsageHistoryBucket {
+  /** Start of the half hour, in epoch milliseconds. */
+  at: number;
+  tokens: SessionTokenTotals;
+  turns: number;
+  /** Claude refused a turn in this half hour, on either clock. */
+  limited: boolean;
+}
+
+/** One project's share of the range. */
+export interface UsageHistoryProject {
+  /** The folder under `~/.claude/projects` that billed it. */
+  slug: string;
+  /** Directory basename, e.g. `Timfog-FS`. */
+  name: string;
+  /** Absolute working directory, resolved from the slug — best-effort, like everywhere else. */
+  path: string;
+  tokens: SessionTokenTotals;
+  turns: number;
+}
+
+/** One model's share of the range. */
+export interface UsageHistoryModel {
+  model: string;
+  tokens: SessionTokenTotals;
+  turns: number;
+}
+
+/**
+ * Where the tokens went over a stretch of history.
+ *
+ * The same sweep the limit cards are measured from, asked a different question:
+ * not how full is the window in progress, but which project, which model and which
+ * hours the spend came from. Everything here is billed usage as the cards define
+ * it — input, output and newly-cached tokens — with cache reads carried alongside
+ * rather than folded in.
+ */
+export interface UsageHistory {
+  /** The range actually read, after defaults and the cap — not necessarily the one asked for. */
+  range: { since: number; until: number };
+  /** How long one bucket runs. Half an hour, and stated rather than assumed. */
+  bucketMs: number;
+  /** The series, oldest first. Narrowed to `project` when one was named. */
+  buckets: UsageHistoryBucket[];
+  /**
+   * Every project in the range, heaviest first.
+   *
+   * Never narrowed by `project` — it is the whole point of comparison, and the list
+   * the page draws its picker from.
+   */
+  projects: UsageHistoryProject[];
+  /** Every model in the range, heaviest first. Narrowed to `project` when one was named. */
+  models: UsageHistoryModel[];
+  /** The slug `buckets` and `models` were narrowed to, when one was asked for and found. */
+  project?: string;
+  generatedAt: number;
+}
+
+/**
  * One session, as a finding refers to it.
  *
  * Small on purpose: a finding names a session so the reader can open it, and the

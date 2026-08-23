@@ -1,7 +1,7 @@
 import type { TrackerConfig } from '../config.ts';
 import { ClaudeCodeSource } from '../sources/claude-code/index.ts';
-import type { RecentSort, RecentWindow, SessionSource } from '../sources/source.ts';
-import type { Session, SessionDetail, UsageLimits } from './types.ts';
+import type { RecentSort, RecentWindow, SessionSource, UsageQuery } from '../sources/source.ts';
+import type { Session, SessionDetail, UsageHistory, UsageLimits } from './types.ts';
 
 export interface SourceStatus {
   id: string;
@@ -147,6 +147,23 @@ export class SessionRegistry {
       if (!source.limits) continue;
       if (!(await source.isAvailable())) continue;
       return source.limits();
+    }
+    return null;
+  }
+
+  /**
+   * Where the tokens went, from the first source that can say.
+   *
+   * The same rule as `limits`, for the same reason: usage is billed to whoever bills
+   * the requests, so two sources answering would be two different histories. `null`
+   * means nobody can, and the page leaves the section off rather than showing a
+   * range with nothing in it.
+   */
+  async usage(query: UsageQuery): Promise<UsageHistory | null> {
+    for (const source of this.sources) {
+      if (!source.usage) continue;
+      if (!(await source.isAvailable())) continue;
+      return source.usage(query);
     }
     return null;
   }

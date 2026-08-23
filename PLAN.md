@@ -339,6 +339,17 @@ Each phase ends with something runnable. No phase depends on a later one.
   that cannot be taken back, so it waits for a decision, not a commit.
 
 ### Phase 5+ — only if wanted
+- **Tell me when a session starts waiting.** The premise at the top of the README is
+  that you lose track of which terminal is waiting on you, and the page only answers
+  that while you are looking at it. The data is already on every row — `status` and
+  `waitingFor` — so this is a client-side diff in `pollSessions`: on `busy|idle →
+  waiting`, raise a `Notification` and put a count in `document.title` so a background
+  tab says it too. `busy → idle` is the other edge worth raising: the long task
+  finished. Permission is asked from a button, never on load; muted by default per
+  edge, and the choice is remembered like the theme. No server change, no dependency,
+  nothing leaves the machine.
+- **A history page** — where the tokens went, per day, per project, per model, from
+  the sweep the limit cards already pay for. See §7.
 - SSE `/api/events` replacing the 2 s poll.
 - A second source adapter (Codex / Cursor) — the real test of the `sources/` seam.
 - Per-project cost rollup from `.claude.json` `lastCost` + token pricing.
@@ -386,3 +397,219 @@ Works everywhere from day one, because of what we *don't* do:
 
 **~3.5 focused days to a publishable v1.** Phase 2 carries the real difficulty;
 Phases 0, 1, and 4 are each half a day.
+
+---
+
+## 7. History page — where the tokens went
+
+The two limit cards answer *how full is the window I am in*. They cannot answer
+*where did my week go* — which project ate it, which model, which hours of which
+days — and that question is the one you ask after a card goes red.
+
+The data is already being read. `readUsageLimits` sweeps every billed transcript
+of the last 28 days, reduces each to half-hour buckets, memoises those per file
+version, and then throws all but two windows away. This page keeps them. A second
+page over the same sweep is the cheapest large feature left in the repo: on a warm
+cache it costs a `stat` per file and some arithmetic.
+
+**A page of its own, not a section.** The dashboard is about right now — two cards,
+who is running, what ran lately. History is about a stretch of past, has its own
+range, its own selection, and wants the width. `/history`, linked from the masthead
+both ways.
+
+### 7.1 — Make the sweep answer two questions  *(~half a day)*  ✅ **DONE**
+
+`readUsageLimits` becomes a caller rather than the owner. Split the walk-merge half
+out as `readUsageBuckets(config, cache, { since, until })`, and let the limits reader
+call it with its own 28 days. Nothing about the limit cards changes — same buckets,
+same cache, same numbers.
+
+Two attributions have to be added to the buckets, and they are not the same price:
+
+- **Project is free.** `listBilledFiles` already walks `projects/<slug>/…` and knows
+  the slug at the moment it reads the directory entry; it just drops it. Carry it on
+  `BilledFile` and merge per `(slug, at)` instead of per `at`. No transcript is
+  re-read, and the cache is untouched — the cached value is per *file*, and a file
+  belongs to one project forever. Subagent transcripts live under their parent's
+  slug, so their turns roll up to the project that spawned them, which is where they
+  billed.
+- **Model is not.** `scanBuckets` reads `message.model` only to skip `<synthetic>`
+  and then discards it. `UsageBucket` gains `byModel: Record<string, { tokens, turns }>`,
+  which changes the shape held in the cache. That cache is in-memory only, so the
+  cost of the change is one cold sweep after a restart — no migration, no on-disk
+  version to bump.
+
+**Done when:** the limits cards report the same numbers they do today, and the
+buckets behind them can say which project and which model each half hour was.
+
+- *Landed:* `src/sources/claude-code/buckets.ts` — the sweep, the cache, and the
+  parsing, with `readUsageBuckets(config, cache, { since, until })` returning half
+  hours by project and `mergeBuckets` folding them for the clocks. `limits.ts` is
+  now only the arithmetic of laying two clocks over what it found, down from 631
+  lines to 278. `test/sources/claude-code/buckets.test.ts` covers the sweep in its
+  own right; the twelve tests include the two the split could have got wrong.
+- *Checked against the real directory:* `/api/limits` returns byte-identical JSON
+  before and after the split, over 909 files, at the same 1.2 s cold and 9 ms warm.
+- *Two things the work forced:*
+  - **A cached bucket must be copied before it is merged into.** The cache hands the
+    same object out on every sweep, so a merge that kept a reference into one would
+    add this sweep's totals to the next sweep's starting point — invisible until two
+    transcripts in one project land in one half hour, which is a normal Tuesday.
+    `byModel` is copied per model for the same reason its tokens already were.
+  - **`until` cannot be filtered by `mtime`.** `since` can — an append-only file last
+    written before it cannot hold a record after it — but a file written *after*
+    `until` can hold plenty from before, so the upper bound is only ever settled per
+    bucket. The asymmetry is worth stating, because the symmetric version looks right.
+- *Also:* on this machine the model split covers **all** 192,825,762 billed tokens of
+  the last 28 days — every turn named its model, including a local `gemma4:e4b`, which
+  is exactly the kind of row a split by model exists to show. The unattributed case is
+  still handled rather than assumed away.
+
+### 7.2 — `GET /api/usage/history`  *(~half a day)*  ✅ **DONE**
+
+A fifth optional member on `SessionSource`, beside `limits?()`, because usage
+history is the same kind of claim: something only whoever bills the requests can
+answer, and a future adapter may not be able to. `SessionRegistry.usage()` picks the
+first source that implements it, exactly as `limits()` does. `404` when none can.
+
+```jsonc
+{
+  "range":    { "since": 0, "until": 0 },
+  "bucketMs": 1800000,
+  "buckets":  [ { "at": 0, "tokens": {…}, "turns": 0 } ],   // sparse: only half hours with usage
+  "projects": [ { "slug": "…", "name": "…", "path": "…", "tokens": {…}, "turns": 0 } ],
+  "models":   [ { "model": "claude-opus-5", "tokens": {…}, "turns": 0 } ],
+  "generatedAt": 0
+}
+```
+
+- **Half-hour grain on the wire, folded by the client.** Days are whole *local* days
+  everywhere in this tool, and the server has no business guessing a timezone —
+  `/api/sessions` already takes epoch milliseconds for the same reason. Buckets are
+  sparse (only half hours that hold usage exist at all), so a working month is on the
+  order of hundreds of entries, not 1,440.
+- **`?project=<slug>` narrows the series** rather than shipping the full
+  project × time cross, which is the one thing in this payload that could grow
+  without a bound worth paying for.
+- **`since`/`until` are the caller's**, as on `/api/sessions`. Capped at 90 days —
+  past that the sweep stops being warm and the page stops being honest about the
+  wait.
+
+- *Landed:* `src/sources/claude-code/history.ts`, a fifth optional member `usage?()`
+  on `SessionSource` with a `UsageQuery` beside `RecentQuery`, `SessionRegistry.usage()`
+  on the `limits()` rule, and the route. Sixteen new tests across the reader, the
+  registry and the route.
+- *Measured on the real directory:* a week is `200 OK` in **446 ms cold, 13 ms warm**,
+  and **19.7 KB** of JSON — 107 half hours, 23 projects, 3 models. The warm figure is
+  the point of sharing the bucket cache with the limit cards: a page opened beside a
+  running dashboard pays a `stat` per file.
+- *Three things the work forced:*
+  - **`project` narrows the series but never the project list.** The list is what the
+    page draws its picker from, and a picker that loses every option but the chosen
+    one cannot be used to choose again. Models narrow with the series, because "which
+    models did *this* project use" is the question a selection asks.
+  - **A slug that matched nothing must not be echoed back.** Asking for a project that
+    billed nothing in the range is an empty series, and `project` is left off the reply
+    rather than repeated — otherwise an empty page looks like a quiet project instead
+    of a bad slug.
+  - **The reply states the range it read, not the range it was asked for.** A caller
+    that asks for a year gets 90 days and `range` says so, so the page cannot draw an
+    axis over data it does not have. Same for a backwards range, which collapses to an
+    empty one rather than being refused — that is a date picker mid-edit, not a bug.
+- *Also:* `billedTokens` moved to `buckets.ts`. A project ranked on this page and a
+  window filled on a limit card have to mean the same thing by "billed", or the page
+  contradicts the card; keeping the definition beside the buckets is what enforces that.
+- *Known, for 7.4:* a project whose directory has since been moved or deleted cannot
+  have its slug walked back to a path, so it falls back to the naive `-` → `/` reading
+  — legible, and wrong. On this machine one of 23 projects is in that state. The page
+  should mark a project it could not find on disk rather than presenting the guess as
+  a location.
+
+### 7.3 — The page  *(~half a day)*  ✅ **DONE**
+
+`src/web/history.html` + `history.js`, sharing `style.css`. `sendStatic` serves by
+extension, so `/history` gets one explicit mapping to `/history.html` — a named
+route, not a general extensionless fallback that would start guessing at paths.
+
+The inline theme resolver in the head of `index.html` moves to `src/web/theme.js`
+and is included by both pages: it still resolves `Auto` to a literal `light`/`dark`
+before first paint, and there is one copy of it instead of two that can drift.
+
+- *Landed:* `history.html`, `history.js`, `theme.js`, `format.js`, a `PAGES` map in
+  `sendStatic`, and a nav in both mastheads. Four new route tests, and the page
+  verified in a browser against the real directory: 32 projects and 4 models over 30
+  days, no console errors, the dashboard unchanged beside it.
+- *Scope moved:* the **project and model tables landed here**, not in 7.4. A shell
+  with nothing in it cannot be reviewed, and both tables are ordinary markup over
+  `/api/usage/history` — no chart work at all. 7.4 is now the two drawings (spend per
+  day, hour of day) and the click-to-filter that ties them to the tables.
+- *Three things the work forced:*
+  - **`theme.js` cannot be a module.** A module is deferred, and deferring the theme
+    shows a light page for a frame to everyone who chose dark — the very thing the
+    inline script existed to prevent. So it is a plain blocking script that stamps the
+    root immediately, then wires the buttons on `DOMContentLoaded` (they do not exist
+    yet when the head runs). It owns the whole control now, which took ~45 lines out
+    of `app.js` rather than copying them into a second page.
+  - **`/history` is a named route, not a fallback.** Trying `path + '.html'` for any
+    unknown path turns every 404 into a filesystem probe. There are two pages here,
+    so there is a two-entry map — and a test that `/sessions` still 404s.
+  - **The busiest day has to be computed in the browser.** The buckets arrive at
+    half-hour grain in absolute time, and which local day one falls in is a question
+    only the reader's timezone can answer. That is the same reason 7.2 ships the
+    native grain instead of days, now with a first caller depending on it.
+- *Also:* `formatCount`, `formatShare`, `formatDay` and the rest moved to
+  `format.js`, imported by both pages. A share rounded down on one page and to
+  nearest on the other would be a real bug the day someone compares them.
+- *Seen on the real page, for 7.4:* two projects can share a basename — `iOS` appears
+  twice (Tivi and Apa), `Trendradar` twice — so the name alone does not identify a
+  row. The path underneath does, but the table should probably show the parent
+  directory rather than leaning on it.
+
+### 7.4 — What is actually on it  *(~1 day)*
+
+Four reads, in the order the question gets asked. Every chart is hand-rolled SVG —
+the repo has no runtime dependency and this feature is not the reason to get one.
+
+1. **Spend per day**, a bar per local day across the range, with the days Claude
+   refused a turn marked. This is the shape of the answer: which days were heavy.
+2. **Projects**, a table ordered by spend with the share bar the limit cards already
+   use. Clicking one narrows everything else on the page to it.
+3. **Models**, the same table, one row per model — where an Opus habit shows up.
+4. **Hour of day**, a 7 × 48 grid off the native bucket grain, which is free and says
+   something the daily bars cannot: whether the five-hour window keeps getting
+   opened at 09:00 or at 23:00.
+
+The rules the rest of the tool keeps, kept here: billed is input + output + newly
+cached, cache reads are shown apart and never folded in, `<synthetic>` is not a
+model, and a range with nothing in it says so rather than drawing an empty axis.
+
+### 7.5 — Range, state, and the trip back  *(~half a day)*
+
+The Range control from the Recent table, reused: 7 / 30 / 90 days or a custom pair
+of dates, in the query string alongside the selected project — `?range=30d&project=…`
+— so a reload comes back to the same view and a bookmark keeps it. The page does not
+poll: history does not move fast enough to be worth re-reading every two seconds, so
+it loads on open and on a change of range, with a manual refresh.
+
+### 7.6 — Tests and docs  *(~half a day)*
+
+`test/sources/claude-code/history.test.ts`, mirroring `src/` as everything in `test/`
+does, over real fixture files: two projects, two models, a subagent, a
+`<synthetic>` record, and turns either side of a local midnight — the last being the
+one that catches a server that bucketed by day in UTC. A route test for the 404 when
+no source can measure it. Then the README section and a screenshot pair, light and
+dark, beside the two already in `docs/`.
+
+### Estimate
+
+**~3 days.** 7.1 carries the only real risk — a cache shape change and an attribution
+that must not quietly alter the limit cards — and 7.4 carries the most work.
+
+### Risks
+
+| risk | mitigation |
+|---|---|
+| a 90-day sweep is cold and slow the first time | the range is capped, the page says it is reading, and the 28 days the limit cards already warm are free |
+| `byModel` grows every cached bucket | one small record per model *seen in that half hour* — in practice one, rarely two |
+| a machine with hundreds of projects | the project list is ranked and cut to the top N, with the tail summed into one `other` row |
+| per-day totals disagreeing with the limit cards | both read the same buckets from the same sweep; the only difference is where the edges fall, and the page says which |

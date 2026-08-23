@@ -103,6 +103,23 @@ async function handle(
     return;
   }
 
+  if (path === '/api/usage/history') {
+    const history = await registry.usage({
+      since: intParam(url, 'since'),
+      until: intParam(url, 'until'),
+      // A slug off the query string never reaches the filesystem: it is matched
+      // against the slugs the source itself reported and used to filter what was
+      // already read, so there is no path here for a caller to point anywhere.
+      project: url.searchParams.get('project') ?? undefined,
+    });
+    if (!history) {
+      sendJson(res, 404, { error: 'No source can measure usage history' });
+      return;
+    }
+    sendJson(res, 200, history);
+    return;
+  }
+
   const detailMatch = /^\/api\/sessions\/([\w-]+)$/.exec(path);
   if (detailMatch?.[1]) {
     const detail = await registry.detail(detailMatch[1]);
@@ -119,7 +136,22 @@ async function handle(
     return;
   }
 
-  await sendStatic(res, path === '/' ? '/index.html' : path);
+  await sendStatic(res, pageFor(path));
+}
+
+/**
+ * The two pages, named rather than guessed at.
+ *
+ * Deliberately not a general "try adding `.html`" fallback: that would turn every
+ * unknown path into a filesystem probe, and there are two pages here, not a site.
+ */
+const PAGES: Record<string, string> = {
+  '/': '/index.html',
+  '/history': '/history.html',
+};
+
+function pageFor(path: string): string {
+  return PAGES[path] ?? path;
 }
 
 async function sendStatic(res: ServerResponse, path: string): Promise<void> {
