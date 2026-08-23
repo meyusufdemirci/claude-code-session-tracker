@@ -1,4 +1,10 @@
-import type { Session, SessionDetail, UsageHistory, UsageLimits } from '../../src/core/types.ts';
+import type {
+  Session,
+  SessionDetail,
+  UsageHistory,
+  UsageLimits,
+  UsageProfile,
+} from '../../src/core/types.ts';
 import type {
   RecentQuery,
   RecentSessions,
@@ -25,6 +31,8 @@ export interface FakeSourceOptions {
   limits?: UsageLimits;
   /** Left out entirely to model a source that cannot say where the tokens went. */
   usage?: UsageHistory;
+  /** Left out entirely to model a source that cannot profile how it was used. */
+  profile?: UsageProfile;
 }
 
 export class FakeSource implements SessionSource {
@@ -34,6 +42,8 @@ export class FakeSource implements SessionSource {
   readonly queries: RecentQuery[] = [];
   /** Every `usage` call it received, in order. */
   readonly usageQueries: UsageQuery[] = [];
+  /** Every `profile` call it received, in order. */
+  readonly profileQueries: UsageQuery[] = [];
 
   readonly #available: boolean;
   readonly #live: Session[];
@@ -60,10 +70,18 @@ export class FakeSource implements SessionSource {
         return usage;
       };
     }
+    if (options.profile) {
+      const profile = options.profile;
+      this.profile = async (query: UsageQuery): Promise<UsageProfile> => {
+        this.profileQueries.push(query);
+        return profile;
+      };
+    }
   }
 
   limits?: () => Promise<UsageLimits>;
   usage?: (query: UsageQuery) => Promise<UsageHistory>;
+  profile?: (query: UsageQuery) => Promise<UsageProfile>;
 
   async isAvailable(): Promise<boolean> {
     return this.#available;

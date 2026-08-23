@@ -2,7 +2,12 @@ import { deepStrictEqual, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createConfig } from '../../src/config.ts';
 import { clampLimit, parseSort, SessionRegistry } from '../../src/core/registry.ts';
-import type { SessionDetail, UsageHistory, UsageLimits } from '../../src/core/types.ts';
+import type {
+  SessionDetail,
+  UsageHistory,
+  UsageLimits,
+  UsageProfile,
+} from '../../src/core/types.ts';
 import { endedSession, FakeSource, liveSession } from '../helpers/fake-source.ts';
 
 const config = createConfig({ claudeDir: '/nowhere' });
@@ -218,6 +223,63 @@ describe('SessionRegistry.usage', () => {
 
   it('says nobody can when no source implements it', async () => {
     strictEqual(await registryOf(new FakeSource()).usage({}), null);
+  });
+});
+
+describe('SessionRegistry.advice', () => {
+  /** Six ordinary sessions and one that grew — enough for the rules to have a median. */
+  const profile: UsageProfile = {
+    range: { since: 1_000, until: 2_000 },
+    sessions: [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `ordinary-${index}`,
+        slug: '-Users-y-Work-app',
+        project: 'app',
+        turns: 20,
+        opening: { input: 0, output: 0, cacheRead: 0, cacheCreate: 20_000 },
+        closingContext: 60_000,
+        tokens: { input: 0, output: 10_000, cacheRead: 0, cacheCreate: 20_000 },
+      })),
+      {
+        id: 'grew',
+        slug: '-Users-y-Work-app',
+        project: 'app',
+        turns: 240,
+        opening: { input: 0, output: 0, cacheRead: 0, cacheCreate: 20_000 },
+        closingContext: 500_000,
+        tokens: { input: 0, output: 90_000, cacheRead: 4_000_000, cacheCreate: 300_000 },
+      },
+    ],
+    models: [],
+    generatedAt: 2_000,
+  };
+
+  it('turns the first source that can profile itself into findings', async () => {
+    const cannot = new FakeSource({ id: 'cannot' });
+    const can = new FakeSource({ id: 'can', profile });
+
+    const advice = await registryOf(cannot, can).advice({});
+
+    deepStrictEqual(advice?.findings.map((finding) => finding.kind), ['long-sessions']);
+    strictEqual(advice?.range.since, 1_000);
+  });
+
+  it('hands the query on untouched', async () => {
+    const can = new FakeSource({ id: 'can', profile });
+
+    await registryOf(can).advice({ since: 1_000, project: '-Users-y-Work-app' });
+
+    deepStrictEqual(can.profileQueries, [{ since: 1_000, project: '-Users-y-Work-app' }]);
+  });
+
+  it('skips a source that is not available', async () => {
+    const absent = new FakeSource({ id: 'absent', available: false, profile });
+
+    strictEqual(await registryOf(absent).advice({}), null);
+  });
+
+  it('says nobody can when no source implements it', async () => {
+    strictEqual(await registryOf(new FakeSource()).advice({}), null);
   });
 });
 

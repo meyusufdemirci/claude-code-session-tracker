@@ -161,6 +161,25 @@
         </article>
       </section>
 
+      <!-- What the spend in the range was made of, when any of it is worth saying.
+           Hidden whenever the findings come back empty, which is the ordinary case:
+           a range with nothing unusual in it should cost the reader no attention.
+           Rows are built in `app.js`, since how many there are is the finding's to say. -->
+      <section class="panel" id="advice-panel" hidden>
+        <div class="panel-head">
+          <h2>Where it goes <span class="count" id="advice-count"></span></h2>
+          <p class="limits-reset" id="advice-range"></p>
+        </div>
+
+        <div class="advice" id="advice-rows"></div>
+
+        <p class="limits-note">
+          Ranked by what each accounts for, and measured in the tokens a limit counts —
+          input, output and cache writes. A finding appears only where the range is
+          heavier than this machine's own middle, so an ordinary week leaves this off.
+        </p>
+      </section>
+
       <section class="panel" id="live-panel">
         <h2>Active <span class="count" id="live-count"></span></h2>
 

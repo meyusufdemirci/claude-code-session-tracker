@@ -120,6 +120,22 @@ async function handle(
     return;
   }
 
+  if (path === '/api/usage/advice') {
+    const advice = await registry.advice({
+      since: intParam(url, 'since'),
+      until: intParam(url, 'until'),
+      // Matched against the slugs the source itself reported, exactly as the history
+      // route does — a slug off the query string never reaches the filesystem.
+      project: url.searchParams.get('project') ?? undefined,
+    });
+    if (!advice) {
+      sendJson(res, 404, { error: 'No source can profile its own usage' });
+      return;
+    }
+    sendJson(res, 200, advice);
+    return;
+  }
+
   const detailMatch = /^\/api\/sessions\/([\w-]+)$/.exec(path);
   if (detailMatch?.[1]) {
     const detail = await registry.detail(detailMatch[1]);

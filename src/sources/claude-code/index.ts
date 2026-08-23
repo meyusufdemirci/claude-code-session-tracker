@@ -1,12 +1,19 @@
 import { access } from 'node:fs/promises';
 import type { TrackerConfig } from '../../config.ts';
 import { FileCache } from '../../core/cache.ts';
-import type { Session, SessionDetail, UsageHistory, UsageLimits } from '../../core/types.ts';
+import type {
+  Session,
+  SessionDetail,
+  UsageHistory,
+  UsageLimits,
+  UsageProfile,
+} from '../../core/types.ts';
 import type { RecentQuery, RecentSessions, SessionSource, UsageQuery } from '../source.ts';
 import { readDetail } from './detail.ts';
 import { readUsageHistory } from './history.ts';
 import type { FileUsage } from './buckets.ts';
 import { readUsageLimits } from './limits.ts';
+import { readUsageProfile } from './profile.ts';
 import { listLiveSessions } from './live.ts';
 import { listRecentSessions } from './transcripts.ts';
 
@@ -81,5 +88,9 @@ export class ClaudeCodeSource implements SessionSource {
 
   async usage(query: UsageQuery): Promise<UsageHistory> {
     return readUsageHistory(this.#config, this.#buckets, this.#projectPaths, query);
+  }
+
+  async profile(query: UsageQuery): Promise<UsageProfile> {
+    return readUsageProfile(this.#config, this.#buckets, this.#projectPaths, query);
   }
 }

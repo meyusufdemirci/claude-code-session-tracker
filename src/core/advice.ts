@@ -4,6 +4,7 @@ import type {
   SessionTokenTotals,
   StandingContextFinding,
   UsageFinding,
+  UsageFindingKind,
   UsageFindings,
   UsageProfile,
   UsageProfileSession,
@@ -42,6 +43,25 @@ const MIN_TOKENS = 20_000;
 
 /** How many rows the panel will ever show. Three is what fits before it stops being read. */
 const MAX_FINDINGS = 3;
+
+/**
+ * Which findings outrank which, before their sizes are compared at all.
+ *
+ * Ranking on tokens alone read well on paper and badly on a real machine: one model
+ * carrying 89% of a range outranks twenty overgrown sessions carrying 22% every
+ * time, and would hold the top row forever. The two are not the same kind of claim.
+ * A long session and a heavy preamble name spend that a different habit would not
+ * have produced; a concentrated model mix only describes the shape of the spend,
+ * and is the same observation tomorrow whatever the reader does about it.
+ *
+ * So the tiers come first and the sizes decide within them — which is the ordering
+ * a reader was going to apply themselves anyway.
+ */
+const KIND_ORDER: Record<UsageFindingKind, number> = {
+  'long-sessions': 0,
+  'standing-context': 0,
+  'model-mix': 1,
+};
 
 /**
  * How many sessions the range needs before its middle means anything.
@@ -93,7 +113,7 @@ export function findUsage(profile: UsageProfile): UsageFindings {
   ]
     .filter((finding): finding is UsageFinding => finding !== undefined)
     .filter((finding) => finding.tokens >= MIN_TOKENS && finding.share >= MIN_SHARE)
-    .sort((a, b) => b.tokens - a.tokens)
+    .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || b.tokens - a.tokens)
     .slice(0, MAX_FINDINGS);
 
   return { findings, range: profile.range, tokens, generatedAt: profile.generatedAt };

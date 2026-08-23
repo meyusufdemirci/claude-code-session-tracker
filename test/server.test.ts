@@ -1,7 +1,13 @@
 import { deepStrictEqual, ok, rejects, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createConfig } from '../src/config.ts';
-import type { SessionDetail, UsageHistory, UsageLimits } from '../src/core/types.ts';
+import type {
+  SessionDetail,
+  UsageFindings,
+  UsageHistory,
+  UsageLimits,
+  UsageProfile,
+} from '../src/core/types.ts';
 import { createServer, listen } from '../src/server.ts';
 import { SessionRegistry } from '../src/core/registry.ts';
 import { endedSession, FakeSource, liveSession } from './helpers/fake-source.ts';
@@ -230,6 +236,63 @@ describe('GET /api/usage/history', () => {
     const res = await server.fetch('/api/usage/history');
 
     strictEqual(res.status, 404);
+  });
+});
+
+describe('GET /api/usage/advice', () => {
+  const profile: UsageProfile = {
+    range: { since: 1_000, until: 2_000 },
+    sessions: [
+      ...Array.from({ length: 6 }, (_, index) => ({
+        id: `ordinary-${index}`,
+        slug: '-Users-y-Work-app',
+        project: 'app',
+        turns: 20,
+        opening: { input: 0, output: 0, cacheRead: 0, cacheCreate: 20_000 },
+        closingContext: 60_000,
+        tokens: { input: 0, output: 10_000, cacheRead: 0, cacheCreate: 20_000 },
+      })),
+      {
+        id: 'grew',
+        slug: '-Users-y-Work-app',
+        project: 'app',
+        turns: 240,
+        opening: { input: 0, output: 0, cacheRead: 0, cacheCreate: 20_000 },
+        closingContext: 500_000,
+        tokens: { input: 0, output: 90_000, cacheRead: 4_000_000, cacheCreate: 300_000 },
+      },
+    ],
+    models: [],
+    generatedAt: 2_000,
+  };
+
+  it('returns the findings the rules drew from the profile', async (t) => {
+    const server = await startServer(t, [new FakeSource({ profile })]);
+
+    const res = await server.fetch('/api/usage/advice');
+
+    strictEqual(res.status, 200);
+    const advice = res.json() as UsageFindings;
+    strictEqual(advice.findings[0]?.kind, 'long-sessions');
+  });
+
+  it('reads the range and the project off the query string', async (t) => {
+    const profiling = new FakeSource({ profile });
+    const server = await startServer(t, [profiling]);
+
+    await server.fetch('/api/usage/advice?since=1000&until=2000&project=-Users-y-Work-app');
+
+    deepStrictEqual(profiling.profileQueries.at(-1), {
+      since: 1_000,
+      until: 2_000,
+      project: '-Users-y-Work-app',
+    });
+  });
+
+  it('says so when no source can profile its own usage', async (t) => {
+    const server = await startServer(t, [new FakeSource()]);
+
+    strictEqual((await server.fetch('/api/usage/advice')).status, 404);
   });
 });
 

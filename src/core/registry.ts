@@ -1,7 +1,14 @@
 import type { TrackerConfig } from '../config.ts';
 import { ClaudeCodeSource } from '../sources/claude-code/index.ts';
 import type { RecentSort, RecentWindow, SessionSource, UsageQuery } from '../sources/source.ts';
-import type { Session, SessionDetail, UsageHistory, UsageLimits } from './types.ts';
+import { findUsage } from './advice.ts';
+import type {
+  Session,
+  SessionDetail,
+  UsageFindings,
+  UsageHistory,
+  UsageLimits,
+} from './types.ts';
 
 export interface SourceStatus {
   id: string;
@@ -164,6 +171,24 @@ export class SessionRegistry {
       if (!source.usage) continue;
       if (!(await source.isAvailable())) continue;
       return source.usage(query);
+    }
+    return null;
+  }
+
+  /**
+   * What is worth saying about a stretch of spend.
+   *
+   * The one place a source's measurements are turned into findings, and deliberately
+   * above the seam: what counts as a session worth mentioning is an argument about
+   * how people use these tools, not about how one CLI stores its transcripts. A
+   * second source would hand over a profile of its own and get the same rules
+   * applied to it, or implement no profile and simply leave the panel off.
+   */
+  async advice(query: UsageQuery): Promise<UsageFindings | null> {
+    for (const source of this.sources) {
+      if (!source.profile) continue;
+      if (!(await source.isAvailable())) continue;
+      return findUsage(await source.profile(query));
     }
     return null;
   }

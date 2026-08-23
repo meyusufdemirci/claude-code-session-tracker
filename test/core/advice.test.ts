@@ -300,9 +300,28 @@ describe('findUsage — what reaches the panel', () => {
         ],
       }),
     );
+    // Measured on a real machine: one model carrying 89% of a range outranks twenty
+    // overgrown sessions carrying 22% on size alone, and would hold the top row
+    // forever. Spend a different habit would not have produced comes first.
+    deepStrictEqual(kinds(findings), ['long-sessions', 'model-mix']);
+  });
+
+  it('ranks findings of one tier against each other by size', () => {
+    const grew = session('grew', {
+      closingContext: 900_000,
+      tokens: totals({ output: 400_000, cacheCreate: 900_000 }),
+    });
+    const sessions = [
+      ...Array.from({ length: 5 }, (_, index) =>
+        session(`short-${index}`, { closingContext: 30_000 }),
+      ),
+      grew,
+    ];
+
+    const { findings } = findUsage(profileOf({ sessions }));
     const ranked = findings.map((finding) => finding.tokens);
 
-    deepStrictEqual(kinds(findings), ['model-mix', 'long-sessions']);
+    deepStrictEqual(kinds(findings), ['long-sessions', 'standing-context']);
     deepStrictEqual([...ranked].sort((a, b) => b - a), ranked);
   });
 

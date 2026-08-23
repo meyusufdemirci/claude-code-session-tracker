@@ -1,4 +1,10 @@
-import type { Session, SessionDetail, UsageHistory, UsageLimits } from '../core/types.ts';
+import type {
+  Session,
+  SessionDetail,
+  UsageHistory,
+  UsageLimits,
+  UsageProfile,
+} from '../core/types.ts';
 
 export interface RecentSessions {
   sessions: Session[];
@@ -93,4 +99,16 @@ export interface SessionSource {
    * two readings of one sweep — but nothing here requires it.
    */
   usage?(query: UsageQuery): Promise<UsageHistory>;
+
+  /**
+   * What the spending over a stretch of history looked like, session by session.
+   *
+   * The third optional reading, and the one furthest from the disk: `limits` asks how
+   * full the window is, `usage` where the tokens went, and this what the *shape* of
+   * the spending was. A source that can answer `usage` can generally answer this from
+   * the same sweep, but it is asked separately because the findings drawn from it are
+   * about how sessions get used, and a CLI whose sessions work differently would want
+   * different ones — or none.
+   */
+  profile?(query: UsageQuery): Promise<UsageProfile>;
 }

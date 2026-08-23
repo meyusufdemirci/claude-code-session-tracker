@@ -20,6 +20,13 @@ const HEALTH_INTERVAL_MS = 15000;
  * The countdown beside them ticks locally, so they still feel live between readings.
  */
 const LIMITS_INTERVAL_MS = 15000;
+/**
+ * How often the findings are re-read.
+ *
+ * Slower again than the cards. A finding is a claim about a week of habits, and one
+ * that changed between two glances would be a claim about noise.
+ */
+const ADVICE_INTERVAL_MS = 60000;
 /** Uptime is redrawn on its own beat so the clock ticks between polls. */
 const TICK_MS = 1000;
 /** Where a window stops being read in clock time and starts being read in days. */
@@ -108,6 +115,8 @@ const state = {
   sort: view.sort,
   /** The last reading of the two usage limits, or null before the first one. */
   limits: null,
+  /** The last set of findings, or null before the first reading. */
+  advice: null,
   /** No source could find its data. The strip and the tables all step aside for the notice. */
   noData: false,
   /** Consecutive failed polls. One is a blip; two is worth interrupting for. */
@@ -164,8 +173,27 @@ function renderAvailability(sources) {
     const panel = byId(id);
     if (panel) panel.hidden = missing;
   }
-  // The strip has its own reason to be hidden, so it is told rather than set here.
+  // The strip and the findings each have their own reason to be hidden, so they are
+  // told rather than set here.
   renderLimits();
+  renderAdvice();
+}
+
+/**
+ * The findings, on the limits' own beat.
+ *
+ * The same sweep answers both and the server caches it per file version, so asking
+ * for this costs a `stat` per transcript once the cards have already been drawn.
+ */
+async function pollAdvice() {
+  try {
+    state.advice = await getJson('/api/usage/advice');
+  } catch {
+    // Older server, or nothing that can profile itself. Either way the panel simply
+    // does not appear — there is nothing here worth an error on screen.
+    state.advice = null;
+  }
+  renderAdvice();
 }
 
 async function pollLimits() {
@@ -689,6 +717,141 @@ function limitNote(limit, share) {
   // The weekly bar Claude bills every model against, not one model's own week.
   const scope = week ? 'Every model, against' : 'Against';
   return `${scope} your heaviest ${span} in ${limit.historyDays} days — ${heaviest}.${guess}`;
+}
+
+/* --------------------------------------------------------------- findings */
+
+/**
+ * What the range's spend was made of, under the two limit cards.
+ *
+ * The server sends measurements, not sentences — a finding is a claim that can be
+ * tested, and how it is worded belongs beside every other sentence on this page. So
+ * the prose lives here, one writer per kind, and each of them says only what the
+ * numbers it was handed will support.
+ *
+ * The bars take the accent colour rather than the cards' four-step tint. That scale
+ * means "how close is this to running out", which is a question about a ceiling; a
+ * share of the range is not, and colouring it on the same ramp would say a quiet
+ * finding was safe and a large one was nearly over.
+ */
+function renderAdvice() {
+  const panel = byId('advice-panel');
+  if (!panel) return;
+
+  const advice = state.advice;
+  const findings = advice?.findings ?? [];
+  // An empty range and an ordinary one look the same from here, which is right: both
+  // are ranges with nothing worth interrupting anyone about.
+  panel.hidden = state.noData || findings.length === 0;
+  if (panel.hidden) return;
+
+  setText('advice-count', findings.length === 1 ? '1 finding' : `${findings.length} findings`);
+  setText('advice-range', rangeLine(advice.range));
+
+  const rows = byId('advice-rows');
+  if (!rows) return;
+  rows.replaceChildren(...findings.map((finding) => adviceRow(finding, advice)));
+}
+
+/** How far back the findings looked, in the words the cards use for a window. */
+function rangeLine({ since, until }) {
+  const days = Math.max(1, Math.round((until - since) / 86_400_000));
+  return days === 1 ? 'Last day' : `Last ${days} days`;
+}
+
+function adviceRow(finding, advice) {
+  const written = WRITERS[finding.kind]?.(finding, advice);
+  if (!written) return document.createElement('div');
+
+  const row = element('article', 'advice-row');
+  const head = element('div', 'advice-head');
+  head.append(element('span', 'advice-title', written.title));
+  head.append(element('span', 'advice-tokens', formatCompactCount(finding.tokens)));
+  row.append(head);
+
+  const bar = element('span', 'limits-bar');
+  const fill = element('span', 'limits-bar-fill');
+  fill.style.width = `${Math.min(100, finding.share * 100)}%`;
+  bar.append(fill);
+  row.append(bar);
+
+  row.append(element('p', 'advice-note', written.note));
+
+  const evidence = element('p', 'advice-evidence');
+  written.evidence.forEach((part, index) => {
+    if (index > 0) evidence.append(element('span', 'sep', '·'));
+    evidence.append(element('span', '', part));
+  });
+  if (written.openId) {
+    const open = element('button', 'advice-open', 'open →');
+    open.type = 'button';
+    open.addEventListener('click', () => openPanel(written.openId, open));
+    evidence.append(open);
+  }
+  if (evidence.childNodes.length > 0) row.append(evidence);
+
+  return row;
+}
+
+/**
+ * One writer per kind of finding.
+ *
+ * Each returns a headline, a sentence, and the figures the sentence rests on. None
+ * of them tells the reader what to do: the number is what makes the case, and an
+ * instruction on top of it would only be this page guessing at work it cannot see.
+ */
+const WRITERS = {
+  'long-sessions': (finding) => {
+    const worst = finding.sessions.slice(0, 3);
+    const count = finding.sessions.length;
+    return {
+      title: 'Long sessions',
+      note:
+        `${count === 1 ? 'One session' : `${count} sessions`} ended several times larger than the ` +
+        `${formatCompactCount(finding.medianClosingContext)} a session here usually reaches. ` +
+        'Every turn after that re-reads the whole window.',
+      evidence: worst.map(
+        (session) =>
+          `${session.project} · ${session.turns} turns · ` +
+          `${formatCompactCount(openingOf(session))} → ${formatCompactCount(session.closingContext)}`,
+      ),
+      // Only ever the heaviest: one way in, at the end of one line, rather than a
+      // column of buttons that makes the reader choose before they have read anything.
+      openId: worst[0]?.id,
+    };
+  },
+
+  'standing-context': (finding) => ({
+    title: 'Standing context',
+    note:
+      `Sessions here open holding ${formatCompactCount(finding.medianOpeningContext)} — about half ` +
+      'of what a typical one ever reaches. That is the system prompt, the tools, the skills and ' +
+      'the memory files, paid before anything is asked.',
+    evidence: [`${finding.sessions} sessions`],
+  }),
+
+  'model-mix': (finding) => {
+    const [top] = finding.models;
+    return {
+      title: 'Model mix',
+      note: `${formatShare(finding.share)} of the range ran on ${shortModel(top?.model) ?? 'one model'}.`,
+      evidence: finding.models.map(
+        (model) => `${shortModel(model.model) ?? model.model} ${formatCompactCount(billedTokens(model.tokens))}`,
+      ),
+    };
+  },
+};
+
+/** The window the session's first turn saw — everything it was handed, cached or not. */
+function openingOf(session) {
+  return session.opening.input + session.opening.cacheRead + session.opening.cacheCreate;
+}
+
+function element(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
 
 /* --------------------------------------------------------------- filtering */
@@ -1444,9 +1607,11 @@ syncControls();
 pollHealth();
 pollSessions();
 pollLimits();
+pollAdvice();
 setInterval(pollHealth, HEALTH_INTERVAL_MS);
 setInterval(pollSessions, SESSIONS_INTERVAL_MS);
 setInterval(pollLimits, LIMITS_INTERVAL_MS);
+setInterval(pollAdvice, ADVICE_INTERVAL_MS);
 setInterval(() => {
   // The clock, not the data — redrawing between polls keeps uptimes honest.
   for (const session of state.live) {

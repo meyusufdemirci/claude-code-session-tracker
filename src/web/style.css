@@ -876,3 +876,72 @@ kbd {
 
 .selection button:hover { border-color: var(--accent); color: var(--accent); }
 .selection button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* One finding per row, ruled apart rather than boxed: they are one reading of one
+   range, and a box around each would say they were separate things — the same
+   argument the two limit cards settle with a rule between them. */
+.advice { display: flex; flex-direction: column; }
+
+.advice-row { padding: 1rem 0; border-top: 1px solid var(--rule); }
+.advice-row:first-child { padding-top: .2rem; border-top: 0; }
+.advice-row:last-child { padding-bottom: 0; }
+
+/* The headline and what it accounts for, at either end of one line. */
+.advice-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .5rem;
+}
+
+.advice-title { font-size: .95rem; font-weight: 600; letter-spacing: -.01em; }
+
+/* The cards' bar is a flex item, which is what gives a `span` its height. Here it
+   stands on its own, so it has to be blockified or it takes no height at all and the
+   row simply has no bar. */
+.advice-row .limits-bar { display: block; }
+
+/* Reads off the bar under it, so it takes the bar's scale and its colour — the same
+   arrangement `.limits-bar-share` has on the cards above. */
+.advice-tokens {
+  flex: none;
+  font-size: .95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+/* The measured sentence. Held to a readable measure, like `.limits-note`. */
+.advice-note { margin: .6rem 0 0; font-size: .82rem; color: var(--ink-soft); max-width: 64ch; }
+
+/* The numbers the sentence rests on, and the way through to the session carrying
+   them. Monospace because it is a row of figures rather than prose. */
+.advice-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .3rem .55rem;
+  margin: .45rem 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .72rem;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.advice-evidence .sep { opacity: .5; }
+
+/* Not a button that does something: it goes to a session, and the drawer is where a
+   session already lives. Pushed to the end of the line so every row's way in is in
+   the same place. */
+.advice-open {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+.advice-open:hover { text-decoration: underline; }
+.advice-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
