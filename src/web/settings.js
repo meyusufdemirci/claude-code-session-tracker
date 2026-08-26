@@ -34,8 +34,10 @@ const STATES = {
   blocked: {
     tone: 'bad',
     text:
-      'Your browser is refusing notifications for this page. Allow them from the icon ' +
-      'in the address bar, then turn a switch back on.',
+      `Your browser is refusing notifications for ${location.host}. That is a setting ` +
+      'it holds for this address, not something the page can undo: open site settings ' +
+      'from the icon beside the address bar, put notifications back to Ask or Allow, ' +
+      'then turn a switch on again.',
   },
   ask: {
     tone: 'ok',
@@ -119,9 +121,9 @@ for (const select of intervals()) {
 /**
  * A permission changed in another tab, or in site settings while this page sat open.
  *
- * `visibilitychange` is the closest thing to a signal the browser offers — there is
- * no event for a permission being granted elsewhere — and coming back to this tab is
- * exactly when a stale reading would be seen. Cheap enough to do on every return.
+ * Coming back to this tab is exactly when a stale reading would be seen, and it costs
+ * nothing to look again. The `permissions` watch below is the sharper instrument;
+ * this is the one every browser has.
  */
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) render();
@@ -131,3 +133,19 @@ document.addEventListener('visibilitychange', () => {
 // opens with them saying what is actually in force.
 fillIntervals();
 render();
+
+/**
+ * The same question again the moment the browser changes its own answer.
+ *
+ * Allowing this page from the address bar never hides the tab, so the handler above
+ * does not fire, and the line underneath would go on saying blocked to a reader who
+ * has just this second fixed it — which is the one moment it most needs to be right.
+ * `permissions` is the only place a browser volunteers the change. Not every browser
+ * answers to this name; where none does, coming back to the tab is still a signal.
+ */
+try {
+  const status = await navigator.permissions?.query({ name: 'notifications' });
+  status?.addEventListener('change', render);
+} catch {
+  // Then `visibilitychange` is the whole of it, which is what it was before.
+}
