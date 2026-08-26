@@ -9,15 +9,17 @@
  * there, and nothing else: the wording of a limit stays in `app.js` beside every
  * other sentence about one, and what arrives here is a message already written.
  *
- * Three things it owns. Whether the reader asked for these, which is a stored
+ * Four things it owns. Whether the reader asked for these, which is a stored
  * choice per limit and a browser permission shared by both, and the two can
- * disagree; what the settings page needs in order to draw and change that; and
- * how rarely a limit is allowed to speak, which is the whole difference between a
- * warning and a page that beeps every second for five hours.
+ * disagree; what the settings page needs in order to draw and change that; how
+ * rarely a limit is allowed to speak, which is the whole difference between a
+ * warning and a page that beeps every second for five hours; and whether the
+ * question has ever been put to this reader at all, since a switch nobody knows
+ * about is a switch nobody has.
  *
  * Both the dashboard and the settings page load this. The dashboard is the only
- * one that sends anything; the settings page is the only one that changes
- * anything. Neither has to know that about the other.
+ * one that sends anything and the only one that asks; the settings page is the
+ * only one that changes anything. Neither has to know that about the other.
  */
 
 /** The two windows that can be watched, and what each is called when asked about. */
@@ -33,6 +35,9 @@ const KEY = 'cst-alerts';
 
 /** How long each limit stays quiet after speaking, in minutes. */
 const QUIET_KEY = 'cst-alert-quiet';
+
+/** That the offer below has been made and answered, so it is never made twice. */
+const INVITE_KEY = 'cst-alerts-invited';
 
 /**
  * When each scope last said something, so it can hold its tongue afterwards.
@@ -186,6 +191,115 @@ export async function setWanted(scope, on) {
     }
   }
   return permission();
+}
+
+/**
+ * How long `Not now` means, before the offer is made one last time.
+ *
+ * Not now says later, so it has to mean later or the button is a lie — but a page
+ * that asks again next week is a page being argued with, and the reader would be
+ * right. A fortnight is the distance at which the second ask is not the first one
+ * repeated: long enough that the habits it is about are a different fortnight's,
+ * short enough to still be the same person on the same project.
+ *
+ * There is no third. Two asks is the whole of it, which is what keeps this an offer
+ * rather than a campaign.
+ */
+const DEFER_DAYS = 14;
+const DEFER_MS = DEFER_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether the dashboard should put the question to this reader now.
+ *
+ * The question is worth putting at all because these switches are a page away behind
+ * a word — Settings — that promises nothing in particular, and the reader they were
+ * built for is precisely the one who never goes looking: the tab is behind an editor,
+ * which is the whole reason a notification is the only thing that can reach them. A
+ * feature nobody is told about is a feature nobody has.
+ *
+ * Three records can close it, and the first two close it for good. A dismissal that
+ * was final is stored here as `true`; a choice under `KEY` — either way, on or off —
+ * says the reader has been to the settings page and made up their mind, which is also
+ * what spares everyone who set these up before the offer existed from being asked
+ * about something they are already using. That second one is the whole of `if
+ * notifications are still off`: still off through never having decided is a reader
+ * who was never asked, while off because they went and turned it off is an answer,
+ * and re-opening a settled question is what makes a page nag.
+ *
+ * The third is a stamp, which only holds until it is a fortnight old. A clock that
+ * has moved backwards under it — an NTP correction, a laptop woken in another
+ * timezone — reads as due rather than as a very long wait, the same way `isQuiet`
+ * does and for the same reason: being wrong that way costs one more offer, being
+ * wrong the other way costs the offer entirely.
+ *
+ * The two answers the browser will not move off are left out, on the same grounds the
+ * settings page keeps them apart: reached over the LAN there is nothing here to turn
+ * on, and a permission already refused cannot be re-asked by a page. Offering either
+ * is not a nudge, it is a dead end with a button on it.
+ */
+export function isInviteDue(now = Date.now()) {
+  const state = permission();
+  if (state === 'unsupported' || state === 'blocked') return false;
+  if (Object.keys(wanted()).length > 0) return false;
+
+  const answered = readStore(INVITE_KEY, null);
+  if (answered === true) return false;
+  if (typeof answered === 'number' && Number.isFinite(answered)) {
+    const since = now - answered;
+    return since < 0 || since >= DEFER_MS;
+  }
+  return true;
+}
+
+/**
+ * `Not now`, taken at its word: hold the offer back rather than drop it.
+ *
+ * The first one stamps the clock and the offer comes back in a fortnight. The second
+ * one lands on a stamp that is already there, which is a reader who has now said no
+ * twice, and there is nothing a third asking would find out that the second did not.
+ * So it closes for good, and the button stays honest both times — the first `Not now`
+ * really was not now, and the second really was the last of it.
+ *
+ * `now` is a parameter so the fortnight can be tested without waiting one.
+ */
+export function deferInvite(now = Date.now()) {
+  writeStore(INVITE_KEY, readStore(INVITE_KEY, null) === null ? now : true);
+}
+
+/**
+ * Close the question for good, on the one path that has earned it.
+ *
+ * The reader who clicks through to the settings page has been shown the switches
+ * themselves, which is everything the offer was ever going to do for them. What is
+ * recorded is that they got there, not what they decided once they had — deciding is
+ * what the switches are for, and one of the honest answers over there is to leave
+ * both of them off.
+ */
+export function dismissInvite() {
+  writeStore(INVITE_KEY, true);
+}
+
+/**
+ * Put this browser back to the state it was in before any of this was set up.
+ *
+ * Which is the only honest way to see the first run again: whether the offer is due
+ * hangs on two records, not one — that it has never been made, and that the switches
+ * have never been touched — and clearing half of them would leave a reader looking at
+ * a page that still, correctly, refuses to ask. So everything this module has written
+ * goes, the switches and their intervals along with the two, and what comes back is a
+ * first run rather than an imitation of one.
+ *
+ * It cannot reach the browser's own permission, which is the one thing here a page is
+ * not allowed to hand back. A `granted` still stands, and so does a `blocked` — and a
+ * blocked one is why this can be called on a browser that then declines to ask, which
+ * is the module being right rather than the reset failing.
+ *
+ * For the test page, and for a console. Nothing on the dashboard or the settings page
+ * calls it: throwing away someone's preferences is not a thing a product page should
+ * offer to do next to the switches that hold them.
+ */
+export function resetAll() {
+  for (const key of [KEY, QUIET_KEY, INVITE_KEY, SENT_KEY]) writeStore(key, undefined);
 }
 
 /**

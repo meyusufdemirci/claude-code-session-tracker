@@ -847,6 +847,105 @@ body.drawer-open { overflow: hidden; }
   .switch-track, .switch-thumb { transition: none; }
 }
 
+/* ----------------------------------------------------------- bottom sheet */
+
+/* Anchored to the bottom edge rather than floated over the middle: what it has to
+   say is worth saying once and is not worth taking the page away for, and the
+   bottom is where a reader's eye is not. `pointer-events` is off on the frame and
+   back on inside it, so the strip of page either side of a narrow sheet stays
+   clickable rather than being covered by an invisible bar. */
+.sheet {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.sheet-body {
+  pointer-events: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .9rem 2rem;
+  width: min(48rem, 100%);
+  padding: 1rem 1.3rem 1.1rem;
+  border: 1px solid var(--rule);
+  /* The one line of colour, along the edge the sheet arrives from. */
+  border-top: 2px solid var(--accent);
+  border-radius: 6px 6px 0 0;
+  background: var(--surface);
+  box-shadow: 0 -2px 28px color-mix(in srgb, var(--ink) 20%, transparent);
+  animation: sheet-rise .24s ease-out;
+}
+
+.sheet-text { min-width: 0; flex: 1 1 22rem; }
+
+/* An `h2` again, and again not the small uppercase label the section headings are:
+   this one is the sentence, so it is sized as one. */
+.sheet-title {
+  margin: 0 0 .25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  text-transform: none;
+  color: var(--ink);
+}
+
+.sheet-note { margin: 0; font-size: .85rem; color: var(--ink-soft); max-width: 52ch; }
+
+.sheet-actions { display: flex; align-items: center; gap: .6rem; flex: none; }
+
+.sheet-later,
+.sheet-cta {
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: .45rem .9rem;
+  font: inherit;
+  font-size: .82rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* The way out is a plain button and the way on is the filled one, so which of the
+   two the page is actually recommending needs no reading. */
+.sheet-later { background: var(--surface); color: var(--ink-soft); }
+.sheet-later:hover { border-color: var(--accent); color: var(--accent); }
+
+.sheet-cta { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.sheet-cta:hover { background: color-mix(in srgb, var(--accent) 85%, var(--ink)); }
+
+.sheet-later:focus-visible,
+.sheet-cta:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+@keyframes sheet-rise {
+  from { transform: translateY(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-body { animation: none; }
+}
+
+/* Narrow enough that the two buttons and the sentence cannot share a line: the
+   actions go under it and split the width, in the order they stand in wider. */
+@media (max-width: 40rem) {
+  .sheet-actions { flex: 1 1 100%; }
+  .sheet-later, .sheet-cta { flex: 1 1 auto; text-align: center; }
+}
+
+/* The sheet is fixed, so while it is up it stands over whatever the page ends with —
+   the Show more button, the footer. Give the body the room back for as long as it is
+   there, rather than leaving the last thing on the page unreachable. */
+body:has(#notify-sheet:not([hidden])) { padding-bottom: 8rem; }
+
+@media (max-width: 40rem) {
+  body:has(#notify-sheet:not([hidden])) { padding-bottom: 12rem; }
+}
+
 /* ----------------------------------------------------------------- states */
 
 /* Losing the server is the one failure that invalidates the whole page, so it is

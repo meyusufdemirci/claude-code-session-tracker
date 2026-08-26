@@ -406,6 +406,39 @@
       </div>
     </aside>
 
+    <!-- Put once, on a first run, to a reader who has never been asked: the switches
+         that turn these on live a page away behind a word that promises nothing in
+         particular, and the person they were built for is the one with this tab behind
+         an editor, who will never go looking. It sits at the bottom rather than over
+         the page because nothing about it is urgent — the page underneath is what they
+         came for, and it stays readable and clickable while this waits its turn.
+
+         Not `aria-modal`, for the same reason: it takes no focus on arrival and traps
+         none, so a reader who is reading gets to carry on. Shown, dismissed and
+         remembered by `app.js`. -->
+    <aside
+      class="sheet"
+      id="notify-sheet"
+      role="dialog"
+      aria-labelledby="notify-sheet-title"
+      aria-describedby="notify-sheet-body"
+      hidden
+    >
+      <div class="sheet-body">
+        <div class="sheet-text">
+          <h2 class="sheet-title" id="notify-sheet-title">Hear about a limit before you reach it</h2>
+          <p class="sheet-note" id="notify-sheet-body">
+            A desktop notification when a window is on course to run past your heaviest
+            one — even with this tab behind your editor.
+          </p>
+        </div>
+        <div class="sheet-actions">
+          <button type="button" class="sheet-later" id="notify-sheet-later">Not now</button>
+          <a class="sheet-cta" id="notify-sheet-open" href="/settings">Open notifications</a>
+        </div>
+      </div>
+    </aside>
+
     <script type="module" src="/app.js"></script>
   </body>
 </html>

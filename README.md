@@ -41,7 +41,8 @@ else — and puts it on one page.
   one you have already put through — so the window that gets away from you is not
   the one you were too busy to check. A switch each on the settings page, both off
   until you turn one on, each with its own interval for how often it may interrupt
-  you: an hour for the five-hour window, four hours for the week.
+  you: an hour for the five-hour window, four hours for the week. Offered once on a
+  first run, and once more a fortnight later if you waved it away.
 - **Active sessions**, checked twice against the OS so a stale file or a
   recycled PID never shows up as running.
 - **Recent sessions** across every project, with Claude's own title, the first
@@ -223,6 +224,13 @@ is drawn against — the heaviest window that has already closed. The card says
 the same thing in colour; this is the same fact addressed to whoever is not
 looking at the card, which is the usual case for a tab parked behind an editor.
 
+The first time the dashboard has a limit to show you and has never asked, a sheet
+comes up along the bottom offering these. **Not now** means not now: it goes away
+and comes back once, a fortnight later, if you still have not turned either switch
+on. A second **Not now** is the last of it. Opening the settings page from it closes
+the offer for good, whatever you decide once you are there — and so does turning a
+switch on or off yourself, since that is you having decided.
+
 **Settings** has a switch for each limit — the five-hour window and the week —
 because the two answer different questions and plenty of people want one and not
 the other. Both start off. Turning either one on is what asks the browser for
@@ -253,8 +261,8 @@ What they will and will not send:
   is the page noticing, not a service. The tab can be buried, but it has to be
   there.
 
-The switches and the intervals are remembered in the browser, per browser, like the
-theme.
+The switches, the intervals and whether that first-run sheet has been answered are
+remembered in the browser, per browser, like the theme.
 
 ## Where the tokens went
 

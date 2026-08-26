@@ -7,7 +7,7 @@ import {
   formatShare,
   formatStamp,
 } from './format.js';
-import { sendAlert } from './notify.js';
+import { deferInvite, dismissInvite, isInviteDue, sendAlert } from './notify.js';
 
 /** How often we ask the server for the session list. Phase 5 may replace this with SSE. */
 const SESSIONS_INTERVAL_MS = 2000;
@@ -206,6 +206,7 @@ async function pollLimits() {
     return;
   }
   renderLimits();
+  offerAlerts();
 }
 
 /**
@@ -771,6 +772,57 @@ function limitNote(limit, share) {
   const scope = week ? 'Every model, against' : 'Against';
   return `${scope} your heaviest ${span} in ${limit.historyDays} days — ${heaviest}.${guess}`;
 }
+
+/* ---------------------------------------------------------------- first run */
+
+/**
+ * Offer the alerts, once, to a reader who has never been asked about them.
+ *
+ * Held until a reading of the limits is actually in hand, which is what the sheet is
+ * about. On a machine Claude Code has never run on there is no window to overshoot
+ * and nothing above the fold to overshoot it — offering to warn about it there is
+ * offering a feature for a page that is not yet a page. Whether the question is due
+ * at all — asked before, answered before, or a browser that will not take the answer
+ * — is `notify.js`'s to settle.
+ *
+ * Called on every reading rather than once at boot, so it survives the ordinary case
+ * of the first poll landing before the data does. Once the sheet is up it is a no-op
+ * until answered, and once answered it is a no-op forever.
+ */
+function offerAlerts() {
+  const sheet = byId('notify-sheet');
+  if (!sheet || !sheet.hidden || state.noData || !state.limits) return;
+  if (!isInviteDue()) return;
+  sheet.hidden = false;
+}
+
+/**
+ * Put the sheet away on a `Not now`, which is not the same as a no.
+ *
+ * Escape lands here too, since dismissing a thing with the key that dismisses things
+ * is the same answer as pressing the button that says so. Either way it is deferred
+ * rather than dropped: `notify.js` holds the offer back a fortnight the first time
+ * and closes it for good the second, so the button means what it says without the
+ * page ever being able to ask a third time.
+ *
+ * Reports whether there was anything to close, which is how Escape knows to stop
+ * here rather than fall through to whatever else it might have meant.
+ */
+function closeAlertOffer() {
+  const sheet = byId('notify-sheet');
+  if (!sheet || sheet.hidden) return false;
+  sheet.hidden = true;
+  deferInvite();
+  return true;
+}
+
+byId('notify-sheet-later')?.addEventListener('click', closeAlertOffer);
+
+// The call to action is an ordinary link, so it keeps everything a link does — a
+// middle click, a new tab, the address it shows on hover. What it adds is the answer
+// the other button does not give: this reader is on their way to the switches, which
+// is the whole of what the sheet was for, so the offer closes rather than defers.
+byId('notify-sheet-open')?.addEventListener('click', () => dismissInvite());
 
 /* --------------------------------------------------------------- findings */
 
@@ -1663,6 +1715,10 @@ document.addEventListener('keydown', (event) => {
     closePanel();
     return;
   }
+
+  // With the panel shut, the sheet is the only thing left on the page that Escape
+  // could be aimed at, and dismissing it is exactly what Not now does.
+  if (event.key === 'Escape' && closeAlertOffer()) return;
 
   // The panel is modal, so a shortcut that jumps behind it would be a broken promise.
   if (state.openId || isTyping(event.target)) return;
