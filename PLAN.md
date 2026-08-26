@@ -713,20 +713,35 @@ already closed. A projection reaching it is `PROJECTION_ALERT = 1` in `app.js`,
 beside `limitPace`, because it is a judgement about a limit and every other one
 lives there.
 
-**What is an occasion.** `renderLimits` runs once a second, and every one of those
-seconds a window over its yardstick is still over it. The occasion is the window,
-named by its `startedAt`, and it fires once. A window that drops back under clears
-its own memory, so a rate that settles and picks up again warns twice — as it
-should, since that is twice the reader would have wanted to know.
+**How often.** `renderLimits` runs once a second, and every one of those seconds a
+window over its yardstick is still over it. What decides whether any of them becomes
+a notification is the clock: a limit that has spoken stays quiet for an interval the
+reader chooses, and the first tick past it is the next one that can speak.
+
+A flat interval rather than one warning per window, which is what the first cut did.
+Per-window sounds tidier and is worse in both directions. A five-hour window that
+crosses at the twenty-minute mark and stays over for the next four and a half hours
+gets one warning at the start and silence through the part where it mattered; and a
+rate that wobbles across the line clears the window's memory each time it dips, so
+the tidy rule quietly becomes no rule at all. An interval says the one thing the
+reader actually has an opinion about — how often is too often — and says it the same
+way whether the window is behaving or not.
+
+**Where the defaults come from.** `session` an hour, `weekly` four hours: each about
+a fifth of its own span, which is the point at which a second warning is news rather
+than a repeat. Both are chosen per limit on `/settings`, from a list that ends at the
+window's own ceiling — five hours is genuinely once per session window, a day is
+about once per working day — so the quietest choice on offer is the quietest thing
+the limit can do rather than an arbitrary large number.
 
 **The split.** `notify.js` owns only what is not about limits: whether the reader
 asked for these (a stored choice per limit and a browser permission shared by both,
-which can disagree — the permission wins), and firing each occasion exactly once.
-The wording stays in `app.js` beside `limitNote` and `resetLine`. `alertOnce` is the
-whole seam, and `undefined` for a token is how a scope says it has nothing to report
-and forgets what it last said. The dashboard is the only page that sends anything and
-the settings page the only one that changes anything; neither has to know that about
-the other.
+which can disagree — the permission wins), and how rarely each one may speak.
+The wording stays in `app.js` beside `limitNote` and `resetLine`. `sendAlert` is the
+whole seam: `app.js` decides whether there is anything to say, `notify.js` decides
+whether now is the time to say it, and neither needs the other's reasons. The
+dashboard is the only page that sends anything and the settings page the only one
+that changes anything; neither has to know that about the other.
 
 **A third page, `/settings`.** The first cut put a single Alerts button in the
 masthead, which was wrong twice over. It made one answer stand for two questions —
@@ -753,14 +768,19 @@ on while nothing can be sent.
   plainly rather than left for someone to discover when a closed tab stops warning
   them.
 - **No second threshold.** A warning at 75% and another at 100% is two notifications
-  for one window, and the second is the only one that changes what anyone does.
-- **No server change.** Everything needed is already in `/api/limits`; the seen-set
-  lives in `localStorage` beside the theme, so nothing new is written anywhere.
+  for one window, and the second is the only one that changes what anyone does. The
+  interval is about repetition, not about a second line to cross.
+- **No catch-up.** An interval that expires while nothing is over the line sends
+  nothing. It is a floor under how often the reader is interrupted, not a schedule.
+- **No server change.** Everything needed is already in `/api/limits`; the interval
+  and the last-sent stamp live in `localStorage` beside the theme, so nothing new is
+  written anywhere.
 
 **Verified in a browser**, not just reasoned about: fires once when a window crosses,
 stays quiet across two poll cycles and thirty-five seconds of redraws after that,
-clears and re-fires when the rate falls and picks up again, and asks for permission
-exactly once no matter how many switches go on. With the week over its yardstick and
-its switch off, only the five-hour window sent — and flipping the week on reached the
-reader on the next tick, without a reload. A refusal snaps both switches back and
-says why.
+stays quiet through a dip back under the line and a fresh crossing inside the
+interval, and asks for permission exactly once no matter how many switches go on.
+Shortening the interval past what has already elapsed lets the next tick through; a
+reload does not buy a second one. With the week over its yardstick and its switch
+off, only the five-hour window sent — and flipping the week on reached the reader on
+the next tick, without a reload. A refusal snaps both switches back and says why.

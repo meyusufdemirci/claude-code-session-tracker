@@ -717,6 +717,11 @@ body.drawer-open { overflow: hidden; }
 
 .switches { display: flex; flex-direction: column; gap: .1rem; }
 
+/* The switch and its interval are one setting shown as two controls, so they sit in
+   one block with the gap between limits wider than the gap inside one. */
+.switch-row { padding-bottom: .5rem; }
+.switch-row:last-child { padding-bottom: 0; }
+
 /* The whole row is the label, so the hint under a title is as clickable as the
    switch itself — a target the width of the panel rather than of a thumb. */
 .switch {
@@ -785,6 +790,33 @@ body.drawer-open { overflow: hidden; }
 .switch-text { display: flex; flex-direction: column; gap: .15rem; }
 .switch-title { font-weight: 600; }
 .switch-hint { font-size: .8rem; color: var(--ink-faint); line-height: 1.5; }
+
+/* Indented to clear the track and land under the hint, so the interval reads as part
+   of the limit above it rather than as a third setting of its own. */
+.switch-cadence {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: -.2rem 0 0;
+  padding-left: 3.8rem;
+  font-size: .8rem;
+  color: var(--ink-faint);
+}
+
+/* Same control as the ones on the dashboard's filter bar, at the same size, because
+   it is doing the same job — `color-scheme` on :root is what makes the native menu
+   follow the theme. */
+.switch-cadence select {
+  padding: .24rem .4rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: .78rem;
+}
+.switch-cadence select:hover { border-color: var(--accent); color: var(--accent); }
+.switch-cadence select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* Only drawn when the browser has something to add, which is why it carries a tone
    rather than a fixed colour: the same line reports "not asked yet" and "refusing". */

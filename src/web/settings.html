@@ -39,36 +39,55 @@
         </div>
 
         <p class="settings-lede">
-          One desktop notification when a window is projected to land past the heaviest
-          one you have already put through.
+          A desktop notification when a window is projected to land past the heaviest
+          one you have already put through — and then quiet for as long as you say.
         </p>
 
         <!-- One switch per limit, because the two answer different questions: a
              five-hour window is about the afternoon, a week is about the week, and
-             plenty of people want to hear about one and not the other. -->
-        <div class="switches" id="alert-switches">
-          <label class="switch">
-            <input type="checkbox" role="switch" id="alert-session" data-scope="session" />
-            <span class="switch-track"><span class="switch-thumb"></span></span>
-            <span class="switch-text">
-              <span class="switch-title">Session limit</span>
-              <span class="switch-hint">
-                Measured against your heaviest window in the last 7 days.
-              </span>
-            </span>
-          </label>
+             plenty of people want to hear about one and not the other. Each carries
+             its own interval for the same reason: the pace of one is not the pace of
+             the other, and neither is the pace at which you want to hear about it.
 
-          <label class="switch">
-            <input type="checkbox" role="switch" id="alert-weekly" data-scope="weekly" />
-            <span class="switch-track"><span class="switch-thumb"></span></span>
-            <span class="switch-text">
-              <span class="switch-title">Weekly limit</span>
-              <span class="switch-hint">
-                Measured against your heaviest week in the last 28 days. Needs a reset
-                Claude has reported.
+             The interval is a sibling of the switch rather than inside it — a select
+             within a `<label>` would toggle the checkbox on its way to opening. -->
+        <div class="switches" id="alert-switches">
+          <div class="switch-row">
+            <label class="switch">
+              <input type="checkbox" role="switch" id="alert-session" data-scope="session" />
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-text">
+                <span class="switch-title">Session limit</span>
+                <span class="switch-hint">
+                  Measured against your heaviest window in the last 7 days.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+            <p class="switch-cadence">
+              <label for="quiet-session">At most one every</label>
+              <!-- Options are drawn by `settings.js` from the lists in `notify.js`, so
+                   what is offered here and what is honoured there cannot drift. -->
+              <select id="quiet-session" data-quiet="session"></select>
+            </p>
+          </div>
+
+          <div class="switch-row">
+            <label class="switch">
+              <input type="checkbox" role="switch" id="alert-weekly" data-scope="weekly" />
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-text">
+                <span class="switch-title">Weekly limit</span>
+                <span class="switch-hint">
+                  Measured against your heaviest week in the last 28 days. Needs a reset
+                  Claude has reported.
+                </span>
+              </span>
+            </label>
+            <p class="switch-cadence">
+              <label for="quiet-weekly">At most one every</label>
+              <select id="quiet-weekly" data-quiet="weekly"></select>
+            </p>
+          </div>
         </div>
 
         <!-- What the browser has to say, which is the half of this the switches
@@ -77,8 +96,8 @@
         <p class="settings-state" id="alerts-state" data-tone="ok" hidden></p>
 
         <ul class="settings-notes">
-          <li><strong>Once per window.</strong> Settling back under and crossing again
-            is a fresh occasion.</li>
+          <li><strong>One at a time.</strong> Inside the interval nothing is sent, even
+            if the window crosses the line again.</li>
           <li><strong>Only while a dashboard tab is open.</strong> The tab can be
             buried, but nothing runs in the background.</li>
           <li><strong>Kept in this browser.</strong> Nothing leaves the machine.</li>

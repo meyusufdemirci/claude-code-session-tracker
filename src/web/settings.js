@@ -1,12 +1,21 @@
 /**
- * The settings page: the switches, and the one sentence the browser gets to add.
+ * The settings page: the switches, their intervals, and the one sentence the browser
+ * gets to add.
  *
  * Everything about what a notification is, when one is worth sending, and whether
  * this browser will allow it lives in `notify.js`. What is here is the page — which
- * switch stands for which limit, what happens when one is flipped, and how the
+ * control stands for which limit, what happens when one is changed, and how the
  * answer is reported back when the browser has an opinion of its own.
  */
-import { isOn, permission, setWanted } from './notify.js';
+import {
+  QUIET_CHOICES,
+  isOn,
+  permission,
+  quietLabel,
+  quietMinutes,
+  setQuietMinutes,
+  setWanted,
+} from './notify.js';
 
 /**
  * What the line under the switches says, keyed by what the browser answered.
@@ -35,6 +44,24 @@ const STATES = {
 };
 
 const switches = () => [...document.querySelectorAll('#alert-switches input[data-scope]')];
+const intervals = () => [...document.querySelectorAll('#alert-switches select[data-quiet]')];
+
+/**
+ * Fill each interval menu from the list its scope actually honours.
+ *
+ * Once, on load, rather than on every render: the options for a scope do not change,
+ * and rebuilding a `<select>` under a reader who has it open closes it.
+ */
+function fillIntervals() {
+  for (const select of intervals()) {
+    for (const minutes of QUIET_CHOICES[select.dataset.quiet] ?? []) {
+      const option = document.createElement('option');
+      option.value = String(minutes);
+      option.textContent = quietLabel(minutes);
+      select.append(option);
+    }
+  }
+}
 
 /**
  * Draw both switches and the line under them from what is actually true.
@@ -53,6 +80,12 @@ function render() {
     // Not disabled, even when blocked: turning a switch on is still how the reader
     // records what they want, and a dead control gives them nowhere to say it.
     input.setAttribute('aria-checked', String(input.checked));
+  }
+
+  for (const select of intervals()) {
+    // From the stored value rather than left where the reader put it, so a choice the
+    // module declined to honour is not left on screen as though it had been taken.
+    select.value = String(quietMinutes(select.dataset.quiet));
   }
 
   const line = document.getElementById('alerts-state');
@@ -76,6 +109,13 @@ for (const input of switches()) {
   });
 }
 
+for (const select of intervals()) {
+  select.addEventListener('change', () => {
+    setQuietMinutes(select.dataset.quiet, Number(select.value));
+    render();
+  });
+}
+
 /**
  * A permission changed in another tab, or in site settings while this page sat open.
  *
@@ -87,6 +127,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) render();
 });
 
-// The switches follow the stored state rather than the other way round, so a reload
+// The controls follow the stored state rather than the other way round, so a reload
 // opens with them saying what is actually in force.
+fillIntervals();
 render();

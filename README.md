@@ -39,8 +39,9 @@ else — and puts it on one page.
   window you have already put through.
 - **A notification** when either window is projected to land past the heaviest
   one you have already put through — so the window that gets away from you is not
-  the one you were too busy to check. A switch each, on the settings page, both
-  off until you turn one on.
+  the one you were too busy to check. A switch each on the settings page, both off
+  until you turn one on, each with its own interval for how often it may interrupt
+  you: an hour for the five-hour window, four hours for the week.
 - **Active sessions**, checked twice against the OS so a stale file or a
   recycled PID never shows up as running.
 - **Recent sessions** across every project, with Claude's own title, the first
@@ -230,12 +231,20 @@ this page the switches come back off and the page says so — that one is a
 setting in your browser's address bar, not here. Your answer is kept underneath
 either way, so unblocking the page is enough to get them back.
 
+Beside each switch is how often that limit may interrupt you. **An hour** for the
+five-hour window and **four hours** for the week to begin with — each about a fifth
+of its own span, which is roughly where a second warning is news rather than a
+repeat. Session offers 30 minutes to 5 hours, the week 1 hour to a day; the
+quietest choice on either is one warning per window.
+
 What they will and will not send:
 
-- **Once per window.** A five-hour window over its yardstick stays over it for
-  hours; the news is that it crossed, not that it is still across.
-- **Again if the answer changes.** A window whose rate settles back under the
-  yardstick and then picks up again is a fresh occasion. So is the next window.
+- **One, then quiet.** A window over its yardstick stays over it for hours, and it
+  says so once. Nothing else is sent until the interval is up, including if the
+  rate settles back under and crosses again — that is the same interruption
+  arriving twice.
+- **Again once the interval is up**, if the window is still headed past. The news
+  by then is that it did not settle.
 - **Nothing for a rolling week.** A week with no reported reset ends at the
   instant it is measured, so there is no remainder to project into and no
   projection to cross anything — the same silence the card's `Projected` cell
@@ -244,7 +253,8 @@ What they will and will not send:
   is the page noticing, not a service. The tab can be buried, but it has to be
   there.
 
-The choices are remembered in the browser, per browser, like the theme.
+The switches and the intervals are remembered in the browser, per browser, like the
+theme.
 
 ## Where the tokens went
 

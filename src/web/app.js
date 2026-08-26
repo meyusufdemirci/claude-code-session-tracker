@@ -7,7 +7,7 @@ import {
   formatShare,
   formatStamp,
 } from './format.js';
-import { alertOnce } from './notify.js';
+import { sendAlert } from './notify.js';
 
 /** How often we ask the server for the session list. Phase 5 may replace this with SSE. */
 const SESSIONS_INTERVAL_MS = 2000;
@@ -627,25 +627,21 @@ const PROJECTION_ALERT = 1;
 const LIMIT_LABELS = { session: 'Session limit', weekly: 'Weekly limit' };
 
 /**
- * Tell the reader, once, that this window is headed past the yardstick.
+ * Tell the reader that this window is headed past the yardstick.
  *
  * The card says the same thing in colour, and says it to whoever is looking at the
  * card. This is the same fact addressed to whoever is not — which is the usual case,
  * since the tab is behind an editor and the window that gets away from you is the
  * one you were too busy to check.
  *
- * A window under its yardstick reports nothing, which is also how it takes back an
- * earlier alarm: a five-hour window that empties and opens again, or a rate that
- * settles back down, is a fresh occasion and gets a fresh warning if it earns one.
- * Everything about whether the reader wants to hear any of this lives in
- * `notify.js`; what is decided here is only whether there is anything to say.
+ * Called every tick, and every tick a window over the line is still over it, so what
+ * is decided here is only whether there is anything to say. How often saying it is
+ * worth interrupting someone for — an interval the reader chooses, per limit — lives
+ * in `notify.js` along with everything else about whether they wanted to hear it.
  */
 function reportProjection(key, limit, current, pace) {
   const ceiling = billedTokens(limit.reference?.tokens);
-  if (!current || pace === undefined || !ceiling || pace / ceiling < PROJECTION_ALERT) {
-    alertOnce(key, undefined);
-    return;
-  }
+  if (!current || pace === undefined || !ceiling || pace / ceiling < PROJECTION_ALERT) return;
 
   const week = limit.windowMs > DAY_MS;
   const span = week ? 'week' : 'five-hour window';
@@ -658,9 +654,7 @@ function reportProjection(key, limit, current, pace) {
     ? `on ${formatDayClock(current.resetsAt)}`
     : `at ${formatClock(current.resetsAt)}`;
 
-  // The window's own start is the occasion. The next one is a different window and
-  // gets its own warning; this one, still over at the next tick, is the same news.
-  alertOnce(key, String(current.startedAt), {
+  sendAlert(key, {
     title: LIMIT_LABELS[key] ?? 'Limit',
     body: `At this pace, it won't last the ${span} — it resets ${when}.`,
   });
