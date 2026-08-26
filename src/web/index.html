@@ -20,6 +20,7 @@
         <nav class="segmented" aria-label="Views">
           <a href="/" aria-current="page">Sessions</a>
           <a href="/history">History</a>
+          <a href="/settings">Settings</a>
         </nav>
       </div>
       <div class="masthead-side">
@@ -27,16 +28,6 @@
           <span class="live-dot"></span>
           <span id="live-badge-text">Connecting</span>
         </span>
-
-        <!-- A desktop notification when either window is projected past the
-             heaviest one on record. One button rather than a pair, because the two
-             states are each other's opposite and a control that spells both out
-             takes twice the width to say the same thing. It goes away entirely in a
-             browser that has no notifications to give; the text says so when the
-             browser has them but is refusing them for this page. -->
-        <div class="segmented" id="alerts" role="group" aria-label="Limit alerts">
-          <button type="button" id="alerts-toggle" aria-pressed="false">Alerts off</button>
-        </div>
 
         <div class="segmented" id="theme" role="group" aria-label="Colour theme">
           <button type="button" data-theme-choice="system" aria-pressed="false">Auto</button>

@@ -7,7 +7,7 @@ import {
   formatShare,
   formatStamp,
 } from './format.js';
-import { alertOnce, setupAlerts } from './notify.js';
+import { alertOnce } from './notify.js';
 
 /** How often we ask the server for the session list. Phase 5 may replace this with SSE. */
 const SESSIONS_INTERVAL_MS = 2000;
@@ -1701,7 +1701,6 @@ byId('drawer')?.addEventListener('keydown', (event) => {
 // The controls follow the state rather than the other way round, so a reload with
 // `?range=7d&sort=tokens-desc` opens with the picker already saying so.
 syncControls();
-setupAlerts();
 
 pollHealth();
 pollSessions();

@@ -385,10 +385,20 @@ describe('static assets', () => {
     ok(res.body.includes('/history.js'));
   });
 
-  it('serves the assets both pages share', async (t) => {
+  it('serves the settings page at /settings', async (t) => {
     const server = await startServer(t, [source()]);
 
-    for (const path of ['/style.css', '/theme.js', '/format.js']) {
+    const res = await server.fetch('/settings');
+
+    strictEqual(res.status, 200);
+    strictEqual(res.headers['content-type'], 'text/html; charset=utf-8');
+    ok(res.body.includes('/settings.js'));
+  });
+
+  it('serves the assets the pages share', async (t) => {
+    const server = await startServer(t, [source()]);
+
+    for (const path of ['/style.css', '/theme.js', '/format.js', '/notify.js']) {
       strictEqual((await server.fetch(path)).status, 200, `expected ${path} to be served`);
     }
   });

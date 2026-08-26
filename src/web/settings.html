@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Claude Code settings</title>
+    <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="%23141413"/><circle cx="16" cy="16" r="9" fill="none" stroke="%23d97757" stroke-width="2" opacity=".45"/><circle cx="16" cy="16" r="4" fill="%23d97757"/></svg>' />
+    <link rel="stylesheet" href="/style.css" />
+
+    <!-- Not deferred, and not a module: the theme has to be resolved before the
+         first paint, or everyone who chose dark gets a frame of light. -->
+    <script src="/theme.js"></script>
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="masthead-title">
+        <p class="eyebrow">Claude Code</p>
+        <h1>Settings</h1>
+        <nav class="segmented" aria-label="Views">
+          <a href="/">Sessions</a>
+          <a href="/history">History</a>
+          <a href="/settings" aria-current="page">Settings</a>
+        </nav>
+      </div>
+      <div class="masthead-side">
+        <div class="segmented" id="theme" role="group" aria-label="Colour theme">
+          <button type="button" data-theme-choice="system" aria-pressed="false">Auto</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="panel settings-panel">
+        <div class="panel-head">
+          <h2>Notifications</h2>
+        </div>
+
+        <p class="settings-lede">
+          The limit cards on the dashboard already say where a window is headed. These
+          say it to you when you are not looking at them — one desktop notification the
+          moment a window is projected to land past the heaviest one you have already
+          put through.
+        </p>
+
+        <!-- One switch per limit, because the two answer different questions: a
+             five-hour window is about the afternoon, a week is about the week, and
+             plenty of people want to hear about one and not the other. -->
+        <div class="switches" id="alert-switches">
+          <label class="switch">
+            <input type="checkbox" role="switch" id="alert-session" data-scope="session" />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+            <span class="switch-text">
+              <span class="switch-title">Session limit</span>
+              <span class="switch-hint">
+                When the five-hour window in progress is projected past your heaviest
+                one in the last 7 days.
+              </span>
+            </span>
+          </label>
+
+          <label class="switch">
+            <input type="checkbox" role="switch" id="alert-weekly" data-scope="weekly" />
+            <span class="switch-track"><span class="switch-thumb"></span></span>
+            <span class="switch-text">
+              <span class="switch-title">Weekly limit</span>
+              <span class="switch-hint">
+                When the week in progress is projected past your heaviest one in the
+                last 28 days. Needs a reset Claude has reported — a week counted back
+                from now has nothing to project into.
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <!-- What the browser has to say, which is the half of this the switches
+             cannot show. Only appears when it has something to add: a page that is
+             happily sending does not need a line telling it so. -->
+        <p class="settings-state" id="alerts-state" data-tone="ok" hidden></p>
+
+        <ul class="settings-notes">
+          <li><strong>Once per window.</strong> A window over its yardstick stays over
+            it for hours; the news is that it crossed, not that it is still across. A
+            rate that settles back under and picks up again is a fresh occasion.</li>
+          <li><strong>Only while a dashboard tab is open.</strong> Nothing runs in the
+            background — this is the page noticing, not a service. The tab can be
+            buried behind everything else, but it has to be there.</li>
+          <li><strong>Kept in this browser.</strong> Like the theme, and like
+            everything else here: nothing is written to your Claude directory and
+            nothing leaves the machine.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script type="module" src="/settings.js"></script>
+  </body>
+</html>

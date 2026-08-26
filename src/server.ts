@@ -156,14 +156,15 @@ async function handle(
 }
 
 /**
- * The two pages, named rather than guessed at.
+ * The pages, named rather than guessed at.
  *
  * Deliberately not a general "try adding `.html`" fallback: that would turn every
- * unknown path into a filesystem probe, and there are two pages here, not a site.
+ * unknown path into a filesystem probe, and there are three pages here, not a site.
  */
 const PAGES: Record<string, string> = {
   '/': '/index.html',
   '/history': '/history.html',
+  '/settings': '/settings.html',
 };
 
 function pageFor(path: string): string {

@@ -9,14 +9,24 @@
  * there, and nothing else: the wording of a limit stays in `app.js` beside every
  * other sentence about one, and what arrives here is a message already written.
  *
- * Three things it owns. Whether the reader asked for these at all, which is a
- * stored choice and a browser permission and the two can disagree; the control
- * that changes that choice; and firing each occasion exactly once, which is the
- * whole difference between a warning and a page that beeps every second for five
- * hours.
+ * Three things it owns. Whether the reader asked for these, which is a stored
+ * choice per limit and a browser permission shared by both, and the two can
+ * disagree; what the settings page needs in order to draw and change that; and
+ * firing each occasion exactly once, which is the whole difference between a
+ * warning and a page that beeps every second for five hours.
+ *
+ * Both the dashboard and the settings page load this. The dashboard is the only
+ * one that sends anything; the settings page is the only one that changes
+ * anything. Neither has to know that about the other.
  */
 
-/** The stored answer to "do you want these" — set only when the answer is yes. */
+/** The two windows that can be watched, and what each is called when asked about. */
+export const SCOPES = [
+  { key: 'session', label: 'Session limit', span: 'five-hour window' },
+  { key: 'weekly', label: 'Weekly limit', span: 'week' },
+];
+
+/** Which limits the reader asked to hear about, as `{ session: true }`. */
 const KEY = 'cst-alerts';
 
 /**
@@ -62,67 +72,75 @@ function writeStore(key, value) {
 const supported = typeof Notification === 'function';
 
 /**
- * What the control says, and what it means.
+ * What the browser has to say, in the four words the settings page can act on.
  *
- * `blocked` is a state rather than an error because it is the one the reader cannot
- * get out of from this page — a permission the browser has already been told to
- * refuse is not re-askable, and the button that keeps offering to try is a button
- * that lies. It says so instead, and points at the address bar.
+ * `blocked` is separated from `ask` because it is the one the reader cannot get out
+ * of from this page: a permission already refused is not re-askable, and a switch
+ * that keeps offering to try is a switch that lies. The page says so instead, and
+ * points at the address bar.
  */
-const LABELS = { off: 'Alerts off', on: 'Alerts on', blocked: 'Alerts blocked' };
-
-const TITLES = {
-  off: 'Notify me when a five-hour window or a week is projected past your heaviest one. Only while this page is open.',
-  on: 'Notifying when a five-hour window or a week is projected past your heaviest one. Only while this page is open.',
-  blocked: 'This browser is refusing notifications for this page. Allow them in the address bar to turn these on.',
-};
-
-/**
- * Whether alerts are on, resolved from both halves of the answer.
- *
- * The stored choice and the browser permission are separate facts and either can
- * change without the other — a permission reset in site settings leaves a `yes` here
- * that is no longer true. The permission wins, so the control never claims to be
- * sending anything it cannot send.
- */
-function state() {
-  if (!supported) return 'off';
+export function permission() {
+  if (!supported) return 'unsupported';
+  if (Notification.permission === 'granted') return 'granted';
   if (Notification.permission === 'denied') return 'blocked';
-  if (Notification.permission !== 'granted') return 'off';
-  return readStore(KEY, false) === true ? 'on' : 'off';
-}
-
-function render() {
-  const button = document.getElementById('alerts-toggle');
-  if (!button) return;
-
-  const current = state();
-  button.textContent = LABELS[current];
-  button.title = TITLES[current];
-  button.setAttribute('aria-pressed', String(current === 'on'));
-  button.disabled = current === 'blocked';
+  return 'ask';
 }
 
 /**
- * Turning them on, which may be two steps or one.
+ * The choices as stored, before the browser gets a say.
  *
- * The permission prompt has to come from a click — browsers require it, and rightly:
- * a page that asks the moment it loads is a page nobody grants. So the ask lives
- * here and nowhere else, and the stored `yes` is only written once the browser has
- * agreed, which keeps the two halves of `state()` from disagreeing the moment they
- * are set.
+ * A `true` here is the shape this key held when there was one switch for both
+ * limits rather than one each. Anyone who turned that on meant both, so it is read
+ * as both rather than dropped on the floor.
  */
-async function enable() {
-  if (Notification.permission !== 'granted') {
+function wanted() {
+  const stored = readStore(KEY, {});
+  if (stored === true) return { session: true, weekly: true };
+  if (!stored || typeof stored !== 'object') return {};
+  return stored;
+}
+
+/** What the switch for this limit should show: the reader's own answer, kept as given. */
+export function isWanted(scope) {
+  return wanted()[scope] === true;
+}
+
+/**
+ * Whether this limit will actually send anything.
+ *
+ * Both halves have to agree. The stored choice and the browser permission can drift
+ * apart — a permission reset in site settings leaves a `yes` here that is no longer
+ * true — and the permission wins, so nothing ever claims to be sending what it
+ * cannot send.
+ */
+export function isOn(scope) {
+  return permission() === 'granted' && isWanted(scope);
+}
+
+/**
+ * Turn one limit's alerts on or off, asking the browser the first time it matters.
+ *
+ * The prompt has to come from a click — browsers require it, and rightly: a page
+ * that asks the moment it loads is a page nobody grants. So the ask lives here, on
+ * the one path that a switch being turned on can take, and nowhere else. Turning a
+ * switch off never asks; there is nothing to ask for.
+ *
+ * The choice is stored either way, including when permission is refused. What the
+ * reader wanted is a separate fact from what the browser allowed, and losing it
+ * would mean re-asking for it the day they unblock the page.
+ */
+export async function setWanted(scope, on) {
+  writeStore(KEY, { ...wanted(), [scope]: on === true });
+
+  if (on && permission() === 'ask') {
     try {
       await Notification.requestPermission();
     } catch {
-      // Safari's older callback form, or a browser that refused outright. Either way
-      // the permission is whatever it was, and `render` will say so.
+      // Safari's older callback form, or a browser that refused outright. Either
+      // way the permission is whatever it was, and the page will say so.
     }
   }
-  if (Notification.permission === 'granted') writeStore(KEY, true);
-  render();
+  return permission();
 }
 
 /**
@@ -161,9 +179,9 @@ function forget(scope) {
 /**
  * Send one, unless this scope has already said this.
  *
- * `token` names the occasion — a window and the threshold it crossed. Pass a fresh
- * one and it fires; pass the one it fired on and it stays quiet. Passing `undefined`
- * is how a scope says it has nothing to report, which also forgets what it last said:
+ * `token` names the occasion — the window that crossed the line. Pass a fresh one
+ * and it fires; pass the one it fired on and it stays quiet. Passing `undefined` is
+ * how a scope says it has nothing to report, which also forgets what it last said:
  * a window that dropped back under its yardstick, or emptied and started again, is
  * free to raise the alarm the next time it earns one.
  */
@@ -173,7 +191,7 @@ export function alertOnce(scope, token, message) {
     return;
   }
 
-  if (state() !== 'on' || alreadyFired(scope, token)) return;
+  if (!isOn(scope) || alreadyFired(scope, token)) return;
   // Remembered before it is sent, not after: a constructor that throws — a headless
   // browser, a platform with no notification centre — must not leave the page trying
   // again a second later, forever.
@@ -194,34 +212,4 @@ export function alertOnce(scope, token, message) {
   } catch {
     // Nothing to fall back to, and the card on the page already says this.
   }
-}
-
-/**
- * Wire the control, once the markup it lives in exists.
- *
- * A browser with no notifications at all takes the control away rather than showing
- * a dead one: there is no choice to offer, and a disabled button in the masthead is
- * a question the reader cannot answer. Blocked is different — that one is a state
- * they can change, somewhere this page can point at but cannot reach.
- */
-export function setupAlerts() {
-  const group = document.getElementById('alerts');
-  const button = document.getElementById('alerts-toggle');
-  if (!group || !button) return;
-
-  if (!supported) {
-    group.hidden = true;
-    return;
-  }
-
-  button.addEventListener('click', () => {
-    if (state() === 'on') {
-      writeStore(KEY, undefined);
-      render();
-      return;
-    }
-    void enable();
-  });
-
-  render();
 }

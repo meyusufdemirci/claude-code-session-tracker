@@ -720,11 +720,29 @@ its own memory, so a rate that settles and picks up again warns twice — as it
 should, since that is twice the reader would have wanted to know.
 
 **The split.** `notify.js` owns only what is not about limits: whether the reader
-asked for these (a stored choice and a browser permission, which can disagree — the
-permission wins), the control that changes it, and firing each occasion exactly
-once. The wording stays in `app.js` beside `limitNote` and `resetLine`. `alertOnce`
-is the whole seam, and `undefined` for a token is how a scope says it has nothing to
-report and forgets what it last said.
+asked for these (a stored choice per limit and a browser permission shared by both,
+which can disagree — the permission wins), and firing each occasion exactly once.
+The wording stays in `app.js` beside `limitNote` and `resetLine`. `alertOnce` is the
+whole seam, and `undefined` for a token is how a scope says it has nothing to report
+and forgets what it last said. The dashboard is the only page that sends anything and
+the settings page the only one that changes anything; neither has to know that about
+the other.
+
+**A third page, `/settings`.** The first cut put a single Alerts button in the
+masthead, which was wrong twice over. It made one answer stand for two questions —
+a five-hour window is about the afternoon and a week is about the week, and wanting
+one is not wanting the other — and it put a preference in the row where the theme
+and the live badge live, which is where you glance, not where you decide. So: a
+switch each, on a page whose job is settings, with room beside them to say what each
+one actually watches and what the browser has to say about it.
+
+Turning a switch **on** is what asks for permission. It is the only path that asks,
+because a click is the gesture browsers require and a page that asks on load is a
+page nobody grants. Turning one off never asks. The wish is stored either way,
+including against a refusal — what the reader wanted and what the browser allowed are
+separate facts, and dropping the first would mean asking again the day they unblock
+the page. What the switch *shows* is `isOn`, both halves agreeing, so it never sits
+on while nothing can be sent.
 
 **What it deliberately does not do:**
 
@@ -741,5 +759,8 @@ report and forgets what it last said.
 
 **Verified in a browser**, not just reasoned about: fires once when a window crosses,
 stays quiet across two poll cycles and thirty-five seconds of redraws after that,
-clears and re-fires when the rate falls and picks up again, sends nothing while off,
-and renders `Alerts blocked` — disabled — when the browser is refusing the page.
+clears and re-fires when the rate falls and picks up again, and asks for permission
+exactly once no matter how many switches go on. With the week over its yardstick and
+its switch off, only the five-hour window sent — and flipping the week on reached the
+reader on the next tick, without a reload. A refusal snaps both switches back and
+says why.
