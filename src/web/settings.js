@@ -19,14 +19,14 @@ const STATES = {
   unsupported: {
     tone: 'bad',
     text:
-      'This browser cannot show notifications on this page. They need a secure context — ' +
-      'reach the dashboard at localhost rather than over the network, and these will work.',
+      'Notifications need a secure context. Reach the dashboard at localhost rather ' +
+      'than over the network, and these will work.',
   },
   blocked: {
     tone: 'bad',
     text:
-      'Your browser is refusing notifications for this page, so nothing will be sent. ' +
-      'Allow them from the icon in the address bar, then turn a switch back on.',
+      'Your browser is refusing notifications for this page. Allow them from the icon ' +
+      'in the address bar, then turn a switch back on.',
   },
   ask: {
     tone: 'ok',
