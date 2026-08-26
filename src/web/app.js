@@ -649,16 +649,20 @@ function reportProjection(key, limit, current, pace) {
 
   const week = limit.windowMs > DAY_MS;
   const span = week ? 'week' : 'five-hour window';
-  const when = week ? formatDayClock(current.resetsAt) : formatClock(current.resetsAt);
+  // The one figure worth carrying out here. The projection and the yardstick behind it
+  // stay on the card, where there is room for them and a reader who came to read them;
+  // the reset is what turns "you are going too fast" into something to do about it —
+  // wait it out, or spend what is left deliberately. A week away has to name its day.
+  // Five hours never leaves today or tomorrow, so the clock alone places it.
+  const when = week
+    ? `on ${formatDayClock(current.resetsAt)}`
+    : `at ${formatClock(current.resetsAt)}`;
 
   // The window's own start is the occasion. The next one is a different window and
   // gets its own warning; this one, still over at the next tick, is the same news.
   alertOnce(key, String(current.startedAt), {
-    title: `${LIMIT_LABELS[key] ?? 'Limit'} · heading past your heaviest ${span}`,
-    body:
-      `Projected ${formatCompactCount(Math.round(pace))} by ${when} — ` +
-      `${formatShare(pace / ceiling)} of the ${formatCompactCount(ceiling)} in your ` +
-      `heaviest ${span} in ${limit.historyDays} days.`,
+    title: LIMIT_LABELS[key] ?? 'Limit',
+    body: `At this pace, it won't last the ${span} — it resets ${when}.`,
   });
 }
 
