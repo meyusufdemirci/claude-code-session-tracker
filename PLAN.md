@@ -339,7 +339,8 @@ Each phase ends with something runnable. No phase depends on a later one.
   that cannot be taken back, so it waits for a decision, not a commit.
 
 ### Phase 5+ — only if wanted
-- **Tell me when a session starts waiting.** The premise at the top of the README is
+- **Tell me when a session starts waiting.** The limits half of this is built — see
+  §8 — and this is the other half. The premise at the top of the README is
   that you lose track of which terminal is waiting on you, and the page only answers
   that while you are looking at it. The data is already on every row — `status` and
   `waitingFor` — so this is a client-side diff in `pollSessions`: on `busy|idle →
@@ -691,3 +692,54 @@ left is the one thing the reader cannot currently say — see below.
 - **The day arithmetic exists twice**, once in `app.js` and once in `history.js`. It
   wants the same treatment `format.js` gave the formatters; it did not get it in 7.5
   only because `app.js` was being edited elsewhere at the time.
+
+---
+
+## 8. Alerts — the page reaching past itself  ✅ **DONE**
+
+The two limit cards already say where a window is headed: `Projected` is the one
+reading on the strip that looks forwards, and it is tinted red once it passes the
+heaviest window on record. But it says it to whoever is looking at the strip, and
+the reader this is for is three windows deep in a refactor with the dashboard in a
+tab behind their editor. A warning nobody is in front of is not a warning.
+
+So: a desktop notification on the one event worth interrupting for, and nothing
+else.
+
+**Where the line is.** There is no quota on this machine to cross — the real
+ceiling is enforced server-side and never written to disk — so the only honest
+threshold is the one the bar is already drawn against: the heaviest window that has
+already closed. A projection reaching it is `PROJECTION_ALERT = 1` in `app.js`,
+beside `limitPace`, because it is a judgement about a limit and every other one
+lives there.
+
+**What is an occasion.** `renderLimits` runs once a second, and every one of those
+seconds a window over its yardstick is still over it. The occasion is the window,
+named by its `startedAt`, and it fires once. A window that drops back under clears
+its own memory, so a rate that settles and picks up again warns twice — as it
+should, since that is twice the reader would have wanted to know.
+
+**The split.** `notify.js` owns only what is not about limits: whether the reader
+asked for these (a stored choice and a browser permission, which can disagree — the
+permission wins), the control that changes it, and firing each occasion exactly
+once. The wording stays in `app.js` beside `limitNote` and `resetLine`. `alertOnce`
+is the whole seam, and `undefined` for a token is how a scope says it has nothing to
+report and forgets what it last said.
+
+**What it deliberately does not do:**
+
+- **No rolling week.** That one ends at the instant it is measured, so `limitPace`
+  returns nothing for it and there is nothing to cross. The card is already silent
+  there for the same reason.
+- **No background service.** This is the page noticing, not a daemon. Documented
+  plainly rather than left for someone to discover when a closed tab stops warning
+  them.
+- **No second threshold.** A warning at 75% and another at 100% is two notifications
+  for one window, and the second is the only one that changes what anyone does.
+- **No server change.** Everything needed is already in `/api/limits`; the seen-set
+  lives in `localStorage` beside the theme, so nothing new is written anywhere.
+
+**Verified in a browser**, not just reasoned about: fires once when a window crosses,
+stays quiet across two poll cycles and thirty-five seconds of redraws after that,
+clears and re-fires when the rate falls and picks up again, sends nothing while off,
+and renders `Alerts blocked` — disabled — when the browser is refusing the page.

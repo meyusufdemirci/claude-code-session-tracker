@@ -7,6 +7,7 @@ import {
   formatShare,
   formatStamp,
 } from './format.js';
+import { alertOnce, setupAlerts } from './notify.js';
 
 /** How often we ask the server for the session list. Phase 5 may replace this with SSE. */
 const SESSIONS_INTERVAL_MS = 2000;
@@ -492,14 +493,14 @@ function renderLimits() {
   panel.hidden = state.noData || !limits;
   if (panel.hidden) return;
 
-  for (const { id, key } of LIMIT_CARDS) renderLimitCard(byId(id), limits[key]);
+  for (const { id, key } of LIMIT_CARDS) renderLimitCard(byId(id), limits[key], key);
 }
 
 /**
  * One limit's card. Both are the same shape, which is why they are one function:
  * a week and five hours differ in how their edges are found, not in what is shown.
  */
-function renderLimitCard(card, limit) {
+function renderLimitCard(card, limit, key) {
   if (!card) return;
   // A server too old to measure this limit leaves the card off rather than drawing
   // an empty one beside a full one.
@@ -508,13 +509,18 @@ function renderLimitCard(card, limit) {
 
   const current = currentWindow(limit);
   const share = limitShare(limit, current);
+  // Read once and used twice: the cell for whoever is looking at the card, and the
+  // alarm for whoever is not. Two readings of the same clock taken a line apart
+  // would be two chances for them to disagree.
+  const pace = limitPace(limit, current);
 
   setField(card, 'window', current ? windowRange(limit, current) : '');
   setField(card, 'reset', resetLine(limit, current));
 
   renderBar(card, share);
   setField(card, 'used', formatCompactCount(billedTokens(current?.tokens)));
-  renderPace(card, limit, current);
+  renderPace(card, limit, pace);
+  reportProjection(key, limit, current, pace);
 
   setField(card, 'note', limitNote(limit, share));
 }
@@ -556,8 +562,7 @@ function renderBar(card, share) {
  * wonder what went missing. Tinted on the bar's scale, so the two agree about when
  * a window is getting expensive.
  */
-function renderPace(card, limit, current) {
-  const pace = limitPace(limit, current);
+function renderPace(card, limit, pace) {
   const row = field(card, 'pace-row');
   if (row) row.hidden = pace === undefined;
   if (pace === undefined) return;
@@ -605,6 +610,56 @@ function limitPace(limit, current, now = Date.now()) {
   if (elapsed / total < PACE_MIN_ELAPSED) return undefined;
 
   return used * (total / elapsed);
+}
+
+/**
+ * Where the projection stops being a reading and starts being news.
+ *
+ * The bar's own top. There is no quota on this machine to cross — the real ceiling
+ * is enforced server-side and never written down — so the heaviest window this
+ * account has already put through is the only line either card can honestly draw,
+ * and a window on course to beat it is the moment the page has something to say that
+ * the reader did not already know when they last looked at it.
+ */
+const PROJECTION_ALERT = 1;
+
+/** How a limit names itself when it arrives outside the page. */
+const LIMIT_LABELS = { session: 'Session limit', weekly: 'Weekly limit' };
+
+/**
+ * Tell the reader, once, that this window is headed past the yardstick.
+ *
+ * The card says the same thing in colour, and says it to whoever is looking at the
+ * card. This is the same fact addressed to whoever is not — which is the usual case,
+ * since the tab is behind an editor and the window that gets away from you is the
+ * one you were too busy to check.
+ *
+ * A window under its yardstick reports nothing, which is also how it takes back an
+ * earlier alarm: a five-hour window that empties and opens again, or a rate that
+ * settles back down, is a fresh occasion and gets a fresh warning if it earns one.
+ * Everything about whether the reader wants to hear any of this lives in
+ * `notify.js`; what is decided here is only whether there is anything to say.
+ */
+function reportProjection(key, limit, current, pace) {
+  const ceiling = billedTokens(limit.reference?.tokens);
+  if (!current || pace === undefined || !ceiling || pace / ceiling < PROJECTION_ALERT) {
+    alertOnce(key, undefined);
+    return;
+  }
+
+  const week = limit.windowMs > DAY_MS;
+  const span = week ? 'week' : 'five-hour window';
+  const when = week ? formatDayClock(current.resetsAt) : formatClock(current.resetsAt);
+
+  // The window's own start is the occasion. The next one is a different window and
+  // gets its own warning; this one, still over at the next tick, is the same news.
+  alertOnce(key, String(current.startedAt), {
+    title: `${LIMIT_LABELS[key] ?? 'Limit'} · heading past your heaviest ${span}`,
+    body:
+      `Projected ${formatCompactCount(Math.round(pace))} by ${when} — ` +
+      `${formatShare(pace / ceiling)} of the ${formatCompactCount(ceiling)} in your ` +
+      `heaviest ${span} in ${limit.historyDays} days.`,
+  });
 }
 
 /** A part of one card, by role. The two cards are identical, so ids would collide. */
@@ -1646,6 +1701,7 @@ byId('drawer')?.addEventListener('keydown', (event) => {
 // The controls follow the state rather than the other way round, so a reload with
 // `?range=7d&sort=tokens-desc` opens with the picker already saying so.
 syncControls();
+setupAlerts();
 
 pollHealth();
 pollSessions();

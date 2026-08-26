@@ -709,6 +709,13 @@ body.drawer-open { overflow: hidden; }
 .segmented button[aria-pressed="true"],
 .segmented a[aria-current="page"] { background: var(--accent); color: var(--surface); }
 
+/* The one state of the alerts control this page can name but not change: the
+   browser is refusing notifications outright. It keeps its place and dims rather
+   than disappearing, because a control that vanishes is a control the reader goes
+   looking for. */
+.segmented button:disabled { cursor: not-allowed; opacity: .55; }
+.segmented button:disabled:hover { color: var(--ink-faint); }
+
 /* ----------------------------------------------------------------- states */
 
 /* Losing the server is the one failure that invalidates the whole page, so it is

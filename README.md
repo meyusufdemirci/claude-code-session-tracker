@@ -37,6 +37,9 @@ else — and puts it on one page.
   limit — how much of each you have spent, when it resets, where it lands if you
   keep going at the rate you have kept, and how that compares with the heaviest
   window you have already put through.
+- **A notification** when either window is projected to land past the heaviest
+  one you have already put through — so the window that gets away from you is not
+  the one you were too busy to check. Off until you turn it on.
 - **Active sessions**, checked twice against the OS so a stale file or a
   recycled PID never shows up as running.
 - **Recent sessions** across every project, with Claude's own title, the first
@@ -211,6 +214,34 @@ transcript is the turn it refused — so both cards at the top of the page are
 If nothing has run in a window there is none, and the card says so rather than
 showing an empty bar.
 
+### Getting told
+
+**Alerts** in the top right sends a desktop notification when a window's
+projection crosses the yardstick the bar is drawn against — the heaviest window
+that has already closed. The card says the same thing in colour; this is the
+same fact addressed to whoever is not looking at the card, which is the usual
+case for a tab parked behind an editor.
+
+It is off until you ask for it, and the first click asks the browser for
+permission. If you have already refused notifications for this page the control
+says **Alerts blocked** and does not keep offering — that one is a setting in
+your browser's address bar, not on this page.
+
+What it will and will not send:
+
+- **Once per window.** A five-hour window over its yardstick stays over it for
+  hours; the news is that it crossed, not that it is still across.
+- **Again if the answer changes.** A window whose rate settles back under the
+  yardstick and then picks up again is a fresh occasion. So is the next window.
+- **Nothing for a rolling week.** A week with no reported reset ends at the
+  instant it is measured, so there is no remainder to project into and no
+  projection to cross anything — the same silence the card's `Projected` cell
+  keeps.
+- **Only while the page is open.** Nothing runs in the background: this is the
+  page noticing, not a service. The tab can be buried, but it has to be there.
+
+The choice is remembered in the browser, per browser, like the theme.
+
 ## Where the tokens went
 
 The limit cards say how full the window in progress is. The history page says what
@@ -277,7 +308,8 @@ text filter and how far you have paged alone. Neither control touches the Active
 table: a running session is shown whatever window is on screen.
 
 The theme follows your OS by default; **Auto / Light / Dark** in the top right
-overrides it, and the choice is remembered.
+overrides it, and the choice is remembered. **Alerts** sits beside it — see
+[Getting told](#getting-told).
 
 ## What it reads
 
