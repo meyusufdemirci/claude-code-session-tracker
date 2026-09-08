@@ -562,6 +562,7 @@ describe('readUsageLimits, Claude Code\u2019s own reading', () => {
     await home.accountFile({
       weeklyResetsAt: NOW + 3 * DAY_MS,
       fiveHour: { percent: 40, resetsAt: at('17:00') },
+      fetchedAt: NOW,
     });
     await home.transcript(CWD, sessionId(1), [turn(1, '07:30', 500), turn(2, '12:00', 10)]);
 
@@ -617,6 +618,69 @@ describe('readUsageLimits, Claude Code\u2019s own reading', () => {
     strictEqual(limits.session.current?.startedAt, at('11:30'));
   });
 
+  it('drops a five-hour reading the work has left behind, and keeps its reset', async (t) => {
+    // Claude Code refreshes the readout when it asks the server, not while you work,
+    // so two hours of it can land against a percentage taken before any of it
+    // happened. The reset it came with does not go stale the same way — windows are
+    // five hours apart however old the reading is — so only the number goes.
+    const home = await claudeHome(t);
+    await home.accountFile({
+      weeklyResetsAt: NOW + 3 * DAY_MS,
+      fiveHour: { percent: 3, resetsAt: at('17:00') },
+      fetchedAt: at('10:00'),
+    });
+    await home.transcript(CWD, sessionId(1), [turn(1, '12:00', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.session.reported, undefined);
+    strictEqual(limits.session.clock, 'reported');
+    strictEqual(limits.session.current?.startedAt, at('12:00'));
+    strictEqual(limits.session.current?.resetsAt, at('17:00'));
+  });
+
+  it('keeps the same reading for the week, which two hours barely moves', async (t) => {
+    // One file, one stamp, two answers: the cutoff is a share of the window a
+    // reading describes, and two hours is a fifth of five but nothing of seven days.
+    const home = await claudeHome(t);
+    await home.accountFile({
+      weeklyResetsAt: NOW + 3 * DAY_MS,
+      weeklyPercent: 35,
+      fiveHour: { percent: 3, resetsAt: at('17:00') },
+      fetchedAt: at('10:00'),
+    });
+    await home.transcript(CWD, sessionId(1), [turn(1, '12:00', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.weekly.reported?.percent, 35);
+    strictEqual(limits.session.reported, undefined);
+  });
+
+  it('drops a reading the account file left undated', async (t) => {
+    // Nothing to age it by is nothing to trust it by: a readout Claude Code wrote in
+    // a shape without a stamp could be minutes or days old.
+    const home = await claudeHome(t);
+    await home.accountFile(
+      JSON.stringify({
+        cachedUsageUtilization: {
+          utilization: {
+            five_hour: { utilization: 88, resets_at: iso('17:00') },
+            seven_day: null,
+          },
+        },
+      }),
+    );
+    await home.transcript(CWD, sessionId(1), [turn(1, '12:00', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.session.reported, undefined);
+    // The reset it came with still places the window it could not date.
+    strictEqual(limits.session.clock, 'reported');
+    strictEqual(limits.session.current?.startedAt, at('12:00'));
+  });
+
   it('says nothing about a limit the readout has no entry for', async (t) => {
     const home = await claudeHome(t);
     await home.accountFile({ weeklyResetsAt: NOW + 3 * DAY_MS });
@@ -645,6 +709,7 @@ describe('readUsageLimits, Claude Code\u2019s own reading', () => {
     await home.accountFile({
       weeklyResetsAt: NOW + 3 * DAY_MS,
       fiveHour: { percent: 20, resetsAt: at('17:00') },
+      fetchedAt: NOW,
     });
     await home.transcript(CWD, sessionId(1), [
       assistantRecord({

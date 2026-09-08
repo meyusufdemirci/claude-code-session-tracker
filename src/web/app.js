@@ -789,8 +789,10 @@ function limitLevel(share) {
  *
  * Two different sentences, because the bar is two different readings. Claude Code's
  * cached percentage is a share of the real quota, and the only thing worth adding to
- * it is how old it is — it is refreshed when Claude Code asks the server, so it keeps
- * pace while you work and stands still while you do not.
+ * it is how old it is — it is refreshed when Claude Code asks the server rather than
+ * while you work, so how far behind the window it has fallen is the reader's to
+ * judge. Once it falls too far the server stops sending it, and the sentence below
+ * takes over along with the bar.
  *
  * Failing that, the honest denominator is the heaviest window this machine has
  * already put through, which the reader has to be told, or the percentage reads as a
@@ -803,12 +805,11 @@ function limitNote(limit, share) {
   // The weekly bar Claude bills every model against, not one model's own week.
   const scope = week ? 'Every model. ' : '';
 
+  // Never a stale one: a reading too old to be about the window in progress, or one
+  // the account file left undated, is dropped before it reaches the page.
   const reported = limit.reported;
   if (reported) {
-    // A readout with no stamp on it is one Claude Code wrote in a shape we only
-    // half recognise. The reading still stands; how old it is simply goes unsaid.
-    const age = reported.fetchedAt ? `, ${formatAgo(reported.fetchedAt)}` : '';
-    return `${scope}Claude Code's own reading of this ${span}${age}.`;
+    return `${scope}Claude Code's own reading of this ${span}, ${formatAgo(reported.fetchedAt)}.`;
   }
 
   // Only worth saying when it is true: an anchored week names its own reset above.

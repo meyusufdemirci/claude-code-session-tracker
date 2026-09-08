@@ -210,15 +210,18 @@ transcript is the turn it refused — so both cards at the top of the page are
   Code's own reading of that limit. Claude Code caches what the server tells it in
   `~/.claude.json`, and that is the only figure on the machine that is a share of the
   ceiling actually enforced, so this is the same number `/usage` shows you. It is
-  exactly as fresh as Claude Code's last request, and the note under the bar says how
-  long ago that was.
+  exactly as fresh as Claude Code's last request for it — which is not the same as
+  the last thing you ran, since the readout is only refreshed when something actually
+  asks the server — so the note under the bar says how long ago that was.
 
-  Where there is no such reading — a machine whose account file has none, or a window
-  whose reading has already reset — the bar falls back to a yardstick: the heaviest
-  window that has already closed, the last 7 days for the five-hour card and the last
-  28 for the weekly one, never the one in progress, since a window is always 100% of
-  itself. The note says which of the two you are looking at. Past the end the bar
-  reads full, having nowhere further to go, while the percentage keeps counting.
+  Where there is no such reading — a machine whose account file has none, a window
+  whose reading has already reset, or a reading left more than a fifth of its window
+  behind the work, which is an hour for the five-hour card and a day and a half for
+  the weekly one — the bar falls back to a yardstick: the heaviest window that has
+  already closed, the last 7 days for the five-hour card and the last 28 for the
+  weekly one, never the one in progress, since a window is always 100% of itself.
+  The note says which of the two you are looking at. Past the end the bar reads
+  full, having nowhere further to go, while the percentage keeps counting.
 
 If nothing has run in a window there is none, and the card says so rather than
 showing an empty bar.

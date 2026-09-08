@@ -37,6 +37,25 @@ const WEEK_HISTORY_DAYS = 28;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * How much of a window a reading may be older than before it stops describing it.
+ *
+ * A percentage ages against the window it is a share of: a fifth of the way past the
+ * moment it was taken, the bar it draws can be a fifth of the way wrong, and nothing
+ * in the file says by how much. So it is kept for a fifth of the window and no
+ * longer — an hour of the five, a day and a half of the seven. The hour is not a
+ * coincidence: Claude Code discards its own cached readout at exactly that age and
+ * asks the server again, and a card claiming to quote Claude Code should not be
+ * showing a figure Claude Code has already thrown away.
+ *
+ * The five-hour clock is where this bites. The readout is only refreshed when
+ * something actually asks the server, so an afternoon of heavy work can run against
+ * a percentage taken before any of it happened — a bar that sits still while the
+ * window it describes fills. Past the cutoff the yardstick takes over: a rougher
+ * denominator, but one that moves with the transcripts.
+ */
+const MAX_READING_AGE = 0.2;
+
+/**
  * What both limits currently look like, measured from `~/.claude/projects`.
  *
  * Two clocks, one sweep. How full is the window in progress — which only the last
@@ -86,13 +105,24 @@ export async function readUsageLimits(
  * next asks the server. Past its own reset it is a fact about a window nobody is in,
  * and the card falls back to the yardstick rather than showing a bar that will not
  * move until the next prompt.
+ *
+ * It goes stale inside its window for the same reason, just less visibly — the
+ * window is still the right one, the number in it is simply hours behind the work —
+ * so a reading is also dropped once it has aged past `MAX_READING_AGE` of the window
+ * it describes. A stamp we could not read counts as too old: there is no way to show
+ * an unstamped reading is still current, and one dated ahead of now is no better.
  */
 function attachReported(
   reported: ReportedLimit | undefined,
   fetchedAt: number | undefined,
   now: number,
+  windowMs: number,
 ): { reported: ReportedLimitReading } | undefined {
   if (!reported || (reported.resetsAt !== undefined && reported.resetsAt <= now)) return undefined;
+
+  const age = now - (fetchedAt ?? 0);
+  if (age < 0 || age > windowMs * MAX_READING_AGE) return undefined;
+
   return {
     reported: {
       percent: reported.percent,
@@ -129,7 +159,7 @@ function measureFiveHour(
     windowMs: WINDOW_MS,
     clock: current && current !== chained ? 'reported' : 'chained',
     historyDays: HISTORY_DAYS,
-    ...attachReported(reported, fetchedAt, now),
+    ...attachReported(reported, fetchedAt, now, WINDOW_MS),
     ...summarize(windows, chained, now, current),
   };
 }
@@ -192,7 +222,7 @@ function measureWeekly(
     windowMs: WEEK_MS,
     clock: reported === undefined ? 'rolling' : 'reported',
     historyDays: WEEK_HISTORY_DAYS,
-    ...attachReported(cached, fetchedAt, now),
+    ...attachReported(cached, fetchedAt, now, WEEK_MS),
     ...summarize(windows, current, now),
   };
 }

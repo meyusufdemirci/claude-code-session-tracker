@@ -217,8 +217,11 @@ export type UsageClock = 'chained' | 'reported' | 'rolling';
  * wherever the page needs a percentage: two tools reading one window must not
  * quote two different numbers for it.
  *
- * Reported for the window in progress only. A reading whose window has already
- * emptied describes a window nobody is in, and is dropped rather than shown.
+ * Reported for the window in progress only, and only while it is still recent
+ * enough to be about it. A reading whose window has emptied describes a window
+ * nobody is in; one taken hours ago describes the right window at a moment that
+ * has long passed. Both are dropped rather than shown, and the page falls back to
+ * measuring against `reference`.
  */
 export interface ReportedLimitReading {
   /** How full the window is, 0–100. Past 100 when the account is spending on extra usage. */
@@ -226,9 +229,11 @@ export interface ReportedLimitReading {
   /**
    * When Claude Code last asked the server.
    *
-   * The percentage is exactly this old. It is refreshed on Claude Code's own
-   * requests, so it keeps pace while you work and stands still while you do not —
-   * and the card says how old it is rather than implying a live reading.
+   * The percentage is exactly this old, and always some way behind: the readout is
+   * refreshed only when something asks the server for it, which can be hours apart
+   * on a machine that is busy the whole time. So the card says how old the reading
+   * is rather than implying a live one, and stops showing it altogether once it has
+   * aged past a fifth of the window it describes.
    */
   fetchedAt: number;
   /** The reset Claude Code named for this window, when it named one. */
@@ -246,9 +251,10 @@ export interface UsageLimit {
   /**
    * Claude Code's own percentage for the window in progress, when it has one on disk.
    *
-   * Absent on a machine whose account file has no cached readout, or once the
-   * window that readout described has reset — in which case `reference` is all
-   * there is to measure against, and the page says so.
+   * Absent on a machine whose account file has no cached readout, and once a
+   * readout has gone stale — its window reset, or the reading itself left too far
+   * behind the work. Then `reference` is all there is to measure against, and the
+   * page says so.
    */
   reported?: ReportedLimitReading;
   /**
