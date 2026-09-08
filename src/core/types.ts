@@ -208,6 +208,33 @@ export interface UsageWindow {
  */
 export type UsageClock = 'chained' | 'reported' | 'rolling';
 
+/**
+ * How full Claude Code itself last saw a limit.
+ *
+ * The percentage the server enforces against, as Claude Code cached it in the
+ * account file — the same figure its own `/usage` shows. It is the only share of
+ * the real ceiling anywhere on this machine, which is why it outranks `reference`
+ * wherever the page needs a percentage: two tools reading one window must not
+ * quote two different numbers for it.
+ *
+ * Reported for the window in progress only. A reading whose window has already
+ * emptied describes a window nobody is in, and is dropped rather than shown.
+ */
+export interface ReportedLimitReading {
+  /** How full the window is, 0–100. Past 100 when the account is spending on extra usage. */
+  percent: number;
+  /**
+   * When Claude Code last asked the server.
+   *
+   * The percentage is exactly this old. It is refreshed on Claude Code's own
+   * requests, so it keeps pace while you work and stands still while you do not —
+   * and the card says how old it is rather than implying a live reading.
+   */
+  fetchedAt: number;
+  /** The reset Claude Code named for this window, when it named one. */
+  resetsAt?: number;
+}
+
 /** One rate limit: the window in progress, and what there is to read it against. */
 export interface UsageLimit {
   /** How long one window of this limit runs. */
@@ -217,12 +244,20 @@ export interface UsageLimit {
   /** The window the clock is inside. Absent when nothing has been billed in one. */
   current?: UsageWindow;
   /**
+   * Claude Code's own percentage for the window in progress, when it has one on disk.
+   *
+   * Absent on a machine whose account file has no cached readout, or once the
+   * window that readout described has reset — in which case `reference` is all
+   * there is to measure against, and the page says so.
+   */
+  reported?: ReportedLimitReading;
+  /**
    * The heaviest window that has already closed.
    *
-   * The real ceiling is never written anywhere we can read, so the honest
-   * denominator is the most this machine has already pushed through one window.
-   * When that window is `limited`, it is not just a high-water mark — it is a
-   * point where Claude actually said no.
+   * A stand-in for the ceiling, for when `reported` is absent: nothing else on disk
+   * says what the quota is, so the honest denominator is the most this machine has
+   * already pushed through one window. When that window is `limited`, it is not just
+   * a high-water mark — it is a point where Claude actually said no.
    */
   reference?: UsageWindow;
   /**

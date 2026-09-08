@@ -530,6 +530,138 @@ describe('readUsageLimits, the weekly limit', () => {
   });
 });
 
+describe('readUsageLimits, Claude Code\u2019s own reading', () => {
+  const NOW = at('12:00');
+  const turn = (n: number, clock: string, output: number): string =>
+    assistantRecord({ id: `msg_${n}`, timestamp: iso(clock), usage: { output } });
+
+  it('carries the five-hour percentage and its age through from the account file', async (t) => {
+    // The one figure on this machine that is a share of the ceiling the server
+    // actually enforces \u2014 and so the one the page has to quote rather than a
+    // percentage of its own.
+    const home = await claudeHome(t);
+    await home.accountFile({
+      weeklyResetsAt: NOW + 3 * DAY_MS,
+      weeklyPercent: 35,
+      fiveHour: { percent: 88, resetsAt: at('17:00') },
+      fetchedAt: at('11:55'),
+    });
+    await home.transcript(CWD, sessionId(1), [turn(1, '12:00', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    deepStrictEqual(limits.session.reported, { percent: 88, fetchedAt: at('11:55'), resetsAt: at('17:00') });
+    strictEqual(limits.weekly.reported?.percent, 35);
+  });
+
+  it('counts the five-hour window back from the reset Claude Code reported', async (t) => {
+    // The chain would open this window on the 07:30 turn and close it at 12:30. The
+    // server says the window it is billing ends at 17:00, so it began at 12:00 \u2014 and
+    // only the turn inside it belongs to what the percentage was a percentage of.
+    const home = await claudeHome(t);
+    await home.accountFile({
+      weeklyResetsAt: NOW + 3 * DAY_MS,
+      fiveHour: { percent: 40, resetsAt: at('17:00') },
+    });
+    await home.transcript(CWD, sessionId(1), [turn(1, '07:30', 500), turn(2, '12:00', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), at('12:30'));
+
+    strictEqual(limits.session.clock, 'reported');
+    strictEqual(limits.session.current?.startedAt, at('12:00'));
+    strictEqual(limits.session.current?.resetsAt, at('17:00'));
+    strictEqual(limits.session.current?.resetsAtIsReported, true);
+    strictEqual(limits.session.current?.tokens.output, 10);
+  });
+
+  it('rounds the reset off the fraction of a second the server writes it short by', async (t) => {
+    // `16:59:59.870550` is a window that empties at five, written as the instant
+    // before the next one opens. Taken literally it puts the card a minute behind
+    // the tool it is reading.
+    const home = await claudeHome(t);
+    await home.accountFile(
+      JSON.stringify({
+        cachedUsageUtilization: {
+          fetchedAtMs: NOW,
+          utilization: {
+            five_hour: { utilization: 88, resets_at: '2026-01-05T16:59:59.870550+00:00' },
+            seven_day: null,
+          },
+        },
+      }),
+    );
+    await home.transcript(CWD, sessionId(1), [turn(1, '12:00', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.session.reported?.resetsAt, at('17:00'));
+    strictEqual(limits.session.current?.resetsAt, at('17:00'));
+    strictEqual(limits.session.current?.startedAt, at('12:00'));
+  });
+
+  it('drops a reading whose window has already emptied', async (t) => {
+    // The file keeps saying 88% long after the five hours it was 88% of have gone,
+    // because nothing rewrites it until Claude Code next asks the server.
+    const home = await claudeHome(t);
+    await home.accountFile({
+      weeklyResetsAt: NOW + 3 * DAY_MS,
+      fiveHour: { percent: 88, resetsAt: at('11:00') },
+    });
+    await home.transcript(CWD, sessionId(1), [turn(1, '11:40', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.session.reported, undefined);
+    // And the window falls back to the one the timestamps chain out.
+    strictEqual(limits.session.clock, 'chained');
+    strictEqual(limits.session.current?.startedAt, at('11:30'));
+  });
+
+  it('says nothing about a limit the readout has no entry for', async (t) => {
+    const home = await claudeHome(t);
+    await home.accountFile({ weeklyResetsAt: NOW + 3 * DAY_MS });
+    await home.transcript(CWD, sessionId(1), [turn(1, '11:40', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.session.reported, undefined);
+    strictEqual(limits.session.clock, 'chained');
+  });
+
+  it('reports no percentage at all when there is no account file', async (t) => {
+    const home = await claudeHome(t);
+    await home.transcript(CWD, sessionId(1), [turn(1, '11:40', 10)]);
+
+    const limits = await readUsageLimits(home.config, cache(), NOW);
+
+    strictEqual(limits.session.reported, undefined);
+    strictEqual(limits.weekly.reported, undefined);
+  });
+
+  it('keeps the yardstick beside the reading rather than in place of it', async (t) => {
+    // The reported window is not one of the chained ones, so the chained window it
+    // stands in for still has to be kept out of its own denominator.
+    const home = await claudeHome(t);
+    await home.accountFile({
+      weeklyResetsAt: NOW + 3 * DAY_MS,
+      fiveHour: { percent: 20, resetsAt: at('17:00') },
+    });
+    await home.transcript(CWD, sessionId(1), [
+      assistantRecord({
+        id: 'old',
+        timestamp: isoAt(at('12:00') - 2 * DAY_MS),
+        usage: { output: 900 },
+      }),
+      turn(1, '12:00', 10),
+    ]);
+
+    const limits = await readUsageLimits(home.config, cache(), at('12:30'));
+
+    strictEqual(limits.session.current?.tokens.output, 10);
+    strictEqual(limits.session.reference?.tokens.output, 900);
+  });
+});
+
 describe('billedTokens', () => {
   it('adds input, output and newly-cached tokens, and nothing else', () => {
     strictEqual(billedTokens({ input: 1, output: 2, cacheRead: 400, cacheCreate: 8 }), 11);

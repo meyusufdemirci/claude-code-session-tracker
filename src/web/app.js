@@ -475,11 +475,17 @@ function renderHint(shown) {
 /**
  * Claude Code's two limits, drawn side by side above the tables.
  *
- * Neither ceiling is enforced anywhere we can read — both are enforced server-side
- * and the only trace either leaves in a transcript is a turn it refused — so there
- * is no true percentage to show for either. What each bar measures against is the
- * heaviest window this machine has already put through on that clock, and the note
- * under it says so plainly rather than letting a percentage imply a number nobody has.
+ * The percentage is Claude Code's own wherever it has one on disk: it caches what
+ * the server told it, and that is the only reading anywhere on this machine that is
+ * a share of the ceiling actually enforced. Two tools on one screen must not quote
+ * two different numbers for one window, so this one defers.
+ *
+ * Failing that — no cached readout, or one whose window has already reset — there is
+ * no true percentage to show, since the ceiling is enforced server-side and the only
+ * trace it leaves in a transcript is a turn it refused. Then the bar falls back to
+ * the heaviest window this machine has already put through on that clock, and the
+ * note under it says so plainly rather than letting a percentage imply a number
+ * nobody has.
  */
 const LIMIT_CARDS = [
   { id: 'limit-session', key: 'session' },
@@ -520,7 +526,7 @@ function renderLimitCard(card, limit, key) {
 
   renderBar(card, share);
   setField(card, 'used', formatCompactCount(billedTokens(current?.tokens)));
-  renderPace(card, limit, pace);
+  renderPace(card, limit, current, pace);
   reportProjection(key, limit, current, pace);
 
   setField(card, 'note', limitNote(limit, share));
@@ -534,9 +540,10 @@ function renderLimitCard(card, limit, key) {
  * measuring a width by eye. Both take the colour of the step they land on, so the
  * two cannot disagree.
  *
- * Where they do part company is past the yardstick: the bar has nowhere further to
- * go and reads full, while the figure keeps counting, since a record broken by half
- * again is worth saying and a bar pinned at its end can only say `at least`.
+ * Where they do part company is past the end: the bar has nowhere further to go and
+ * reads full, while the figure keeps counting, since a limit overrun by half again —
+ * on extra usage, or a record broken — is worth saying, and a bar pinned at its end
+ * can only say `at least`.
  */
 function renderBar(card, share) {
   const bar = field(card, 'bar');
@@ -563,7 +570,7 @@ function renderBar(card, share) {
  * wonder what went missing. Tinted on the bar's scale, so the two agree about when
  * a window is getting expensive.
  */
-function renderPace(card, limit, pace) {
+function renderPace(card, limit, current, pace) {
   const row = field(card, 'pace-row');
   if (row) row.hidden = pace === undefined;
   if (pace === undefined) return;
@@ -572,9 +579,9 @@ function renderPace(card, limit, pace) {
   if (!node) return;
   node.textContent = formatCompactCount(Math.round(pace));
 
-  const ceiling = billedTokens(limit.reference?.tokens);
-  // No closed window to measure against means no scale to tint on — the same
-  // silence the bar keeps when it has no yardstick.
+  const ceiling = limitCeiling(limit, current);
+  // Nothing to measure against means no scale to tint on — the same silence the bar
+  // keeps when it has no denominator.
   if (ceiling) node.setAttribute('data-usage', limitLevel(pace / ceiling));
   else node.removeAttribute('data-usage');
 }
@@ -592,10 +599,10 @@ const PACE_MIN_ELAPSED = 0.2;
 /**
  * What this window comes to by its reset if it carries on at the rate it has kept.
  *
- * The bar behind it looks backwards — a share of the heaviest window on record, and
- * so an answer to how much has gone. This is the other half: whether what is left of
- * the clock will survive the rate it is being spent at, which is the one thing on the
- * card that can change what the reader does next.
+ * The bar behind it looks backwards — how much of the window has gone. This is the
+ * other half: whether what is left of the clock will survive the rate it is being
+ * spent at, which is the one thing on the card that can change what the reader does
+ * next.
  *
  * Nothing is returned for a rolling week. That one ends at the instant it was
  * measured, so there is no remainder to project into and the projection would only
@@ -616,11 +623,13 @@ function limitPace(limit, current, now = Date.now()) {
 /**
  * Where the projection stops being a reading and starts being news.
  *
- * The bar's own top. There is no quota on this machine to cross — the real ceiling
- * is enforced server-side and never written down — so the heaviest window this
- * account has already put through is the only line either card can honestly draw,
- * and a window on course to beat it is the moment the page has something to say that
- * the reader did not already know when they last looked at it.
+ * The bar's own top, whichever bar the card is drawing. With Claude Code's reading
+ * in hand that is the real ceiling, and a window on course to reach it is a window
+ * that will actually be refused. Without one it is the heaviest window this account
+ * has already put through — the only line the card can honestly draw when the quota
+ * itself is enforced server-side and never written down. Either way it is the moment
+ * the page has something to say that the reader did not already know when they last
+ * looked at it.
  */
 const PROJECTION_ALERT = 1;
 
@@ -641,7 +650,7 @@ const LIMIT_LABELS = { session: 'Session limit', weekly: 'Weekly limit' };
  * in `notify.js` along with everything else about whether they wanted to hear it.
  */
 function reportProjection(key, limit, current, pace) {
-  const ceiling = billedTokens(limit.reference?.tokens);
+  const ceiling = limitCeiling(limit, current);
   if (!current || pace === undefined || !ceiling || pace / ceiling < PROJECTION_ALERT) return;
 
   const week = limit.windowMs > DAY_MS;
@@ -714,17 +723,43 @@ function resetLine(limit, current) {
 }
 
 /**
- * How full the window in progress is, against the heaviest one on record.
+ * How full the window in progress is.
+ *
+ * Claude Code's own figure when the account file has one for this window, because
+ * it is a share of the real ceiling and this page has no business disagreeing with
+ * the tool it is reading. Otherwise the fallback: what has been billed, over the
+ * heaviest window on record.
  *
  * A window that has not opened yet reads as empty rather than as nothing at all:
  * zero of the yardstick is a true answer, and the only one that leaves the card
  * the same shape between windows instead of blanking it until the next prompt.
- * Only a missing yardstick takes the bar away, because that is the case where
- * there is genuinely no denominator to draw against.
+ * Only a missing denominator takes the bar away, because that is the case where
+ * there is genuinely nothing to draw against.
  */
 function limitShare(limit, current) {
+  const percent = limit.reported?.percent;
+  if (typeof percent === 'number') return percent / 100;
+
   const ceiling = billedTokens(limit.reference?.tokens);
   return ceiling ? billedTokens(current?.tokens) / ceiling : undefined;
+}
+
+/**
+ * What a full window is worth in tokens — the scale the projection is read against.
+ *
+ * With a reported percentage there is one to be had: the window has spent this many
+ * tokens to reach that percent, so the whole of it is that many over that share.
+ * Calibrated rather than assumed, and it moves with the reading, which is what makes
+ * a projected token count comparable with the bar above it instead of with a
+ * yardstick the bar is no longer using.
+ *
+ * Without one, the yardstick is all there is — the heaviest window on record.
+ */
+function limitCeiling(limit, current) {
+  const percent = limit.reported?.percent;
+  const used = billedTokens(current?.tokens);
+  if (percent > 0 && used > 0) return used / (percent / 100);
+  return billedTokens(limit.reference?.tokens) || undefined;
 }
 
 /**
@@ -752,14 +787,30 @@ function limitLevel(share) {
 /**
  * One line saying what the bar is a share of.
  *
- * The real ceiling is enforced server-side and never written to disk, so the only
- * honest denominator is the heaviest window this machine has already put through —
- * which the reader has to be told, or the percentage reads as a quota it is not.
- * Everything past that sentence is detail the card is better off without.
+ * Two different sentences, because the bar is two different readings. Claude Code's
+ * cached percentage is a share of the real quota, and the only thing worth adding to
+ * it is how old it is — it is refreshed when Claude Code asks the server, so it keeps
+ * pace while you work and stands still while you do not.
+ *
+ * Failing that, the honest denominator is the heaviest window this machine has
+ * already put through, which the reader has to be told, or the percentage reads as a
+ * quota it is not. Everything past that sentence is detail the card is better off
+ * without.
  */
 function limitNote(limit, share) {
   const week = limit.windowMs > DAY_MS;
   const span = week ? 'week' : 'five-hour window';
+  // The weekly bar Claude bills every model against, not one model's own week.
+  const scope = week ? 'Every model. ' : '';
+
+  const reported = limit.reported;
+  if (reported) {
+    // A readout with no stamp on it is one Claude Code wrote in a shape we only
+    // half recognise. The reading still stands; how old it is simply goes unsaid.
+    const age = reported.fetchedAt ? `, ${formatAgo(reported.fetchedAt)}` : '';
+    return `${scope}Claude Code's own reading of this ${span}${age}.`;
+  }
+
   // Only worth saying when it is true: an anchored week names its own reset above.
   const guess = week && limit.clock === 'rolling' ? ' No reset reported, so it is counted back from now.' : '';
 
@@ -768,9 +819,7 @@ function limitNote(limit, share) {
   }
 
   const heaviest = formatCompactCount(billedTokens(limit.reference.tokens));
-  // The weekly bar Claude bills every model against, not one model's own week.
-  const scope = week ? 'Every model, against' : 'Against';
-  return `${scope} your heaviest ${span} in ${limit.historyDays} days — ${heaviest}.${guess}`;
+  return `${scope}Against your heaviest ${span} in ${limit.historyDays} days — ${heaviest}.${guess}`;
 }
 
 /* ---------------------------------------------------------------- first run */

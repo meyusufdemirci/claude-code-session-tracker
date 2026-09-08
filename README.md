@@ -34,12 +34,12 @@ else — and puts it on one page.
 
 - **Your limits**, at the top: two cards, one for the five-hour window Claude
   Code calls a session limit and one for the seven-day window it calls a weekly
-  limit — how much of each you have spent, when it resets, where it lands if you
-  keep going at the rate you have kept, and how that compares with the heaviest
-  window you have already put through.
-- **A notification** when either window is projected to land past the heaviest
-  one you have already put through — so the window that gets away from you is not
-  the one you were too busy to check. A switch each on the settings page, both off
+  limit — how full each one is, when it resets, and where it lands if you keep
+  going at the rate you have kept. The percentage is Claude Code's own, read from
+  the usage readout it caches on this machine, so the two never quote you different
+  numbers for the same window.
+- **A notification** when either window is projected to land past its limit — so
+  the window that gets away from you is not the one you were too busy to check. A switch each on the settings page, both off
   until you turn one on, each with its own interval for how often it may interrupt
   you: an hour for the five-hour window, four hours for the week. Offered once on a
   first run, and once more a fortnight later if you waved it away.
@@ -166,7 +166,7 @@ can do with `curl`:
 | `GET /api/sessions?since=&until=` | The same list, narrowed to transcripts last written in that window. Epoch milliseconds; `since` is inclusive, `until` exclusive; either may be left off. Running sessions ignore it |
 | `GET /api/sessions?sort=` | `recent` (the default), `tokens-desc`, or `tokens-asc`. Ranks the finished sessions across the whole window, not just the page. An unknown value falls back to `recent` |
 | `GET /api/sessions/:id` | One session with `counts`, `tokens`, `models`, `activeMs`, `awaySummary`, and `notes` |
-| `GET /api/limits` | Both limits, as `session` (five hours) and `weekly` (seven days). Each carries `windowMs`, `clock`, `historyDays`, the `current` window, the heaviest closed one as `reference`, and `lastLimited` if Claude ever cut one short. 404 when no source can measure them |
+| `GET /api/limits` | Both limits, as `session` (five hours) and `weekly` (seven days). Each carries `windowMs`, `clock`, `historyDays`, the `current` window, Claude Code's own percentage as `reported` when it has one for the window in progress, the heaviest closed window as `reference`, and `lastLimited` if Claude ever cut one short. 404 when no source can measure them |
 | `GET /api/usage/history?since=&until=&project=` | Where the tokens went: a sparse half-hour series, every project in the range with its name and directory, and every model, each ranked by billed tokens. Epoch milliseconds again; `since` defaults to 30 days back, `until` to now, and a span wider than 90 days is narrowed — `range` in the reply is always the one actually read. `project` takes a slug from the same reply and narrows the series and the models to it, never the project list. 404 when no source can measure it |
 | `GET /api/health` | `ok`, the version, the Node it runs on, the resolved Claude directory, and per-source status |
 | `POST /api/sessions/:id/reveal` | Shows that transcript in your file manager. Requires a loopback `Origin` |
@@ -206,23 +206,30 @@ transcript is the turn it refused — so both cards at the top of the page are
   stays away until a fifth of the window has gone, since a rate read off the
   first few minutes projects noise, and stays away from a rolling week entirely:
   that one ends at the instant it is measured, leaving nothing to project into.
-- **The share** — the bar, and the percentage printed at the end of it — is against
-  the heaviest window that has already closed: the last 7 days for the five-hour
-  card, the last 28 for the weekly one, never the one in progress, since a window is
-  always 100% of itself. It is a yardstick, not a quota. Past it the bar reads full,
-  having nowhere further to go, while the percentage keeps counting. If Claude has
-  actually cut a window short, the note says which one and how big it was, because
-  that is the one point on the scale it drew itself.
+- **The share** — the bar, and the percentage printed at the end of it — is Claude
+  Code's own reading of that limit. Claude Code caches what the server tells it in
+  `~/.claude.json`, and that is the only figure on the machine that is a share of the
+  ceiling actually enforced, so this is the same number `/usage` shows you. It is
+  exactly as fresh as Claude Code's last request, and the note under the bar says how
+  long ago that was.
+
+  Where there is no such reading — a machine whose account file has none, or a window
+  whose reading has already reset — the bar falls back to a yardstick: the heaviest
+  window that has already closed, the last 7 days for the five-hour card and the last
+  28 for the weekly one, never the one in progress, since a window is always 100% of
+  itself. The note says which of the two you are looking at. Past the end the bar
+  reads full, having nowhere further to go, while the percentage keeps counting.
 
 If nothing has run in a window there is none, and the card says so rather than
 showing an empty bar.
 
 ### Getting told
 
-A desktop notification when a window's projection crosses the yardstick the bar
-is drawn against — the heaviest window that has already closed. The card says
-the same thing in colour; this is the same fact addressed to whoever is not
-looking at the card, which is the usual case for a tab parked behind an editor.
+A desktop notification when a window's projection crosses the top of the bar it is
+drawn against — the real ceiling where Claude Code has reported one, and the heaviest
+window that has already closed where it has not. The card says the same thing in
+colour; this is the same fact addressed to whoever is not looking at the card, which
+is the usual case for a tab parked behind an editor.
 
 The first time the dashboard has a limit to show you and has never asked, a sheet
 comes up along the bottom offering these. **Not now** means not now: it goes away
@@ -343,7 +350,7 @@ Everything comes from what Claude Code already writes to disk:
 | `<session cwd>/.git/HEAD` | The branch a running session is on |
 | `~/.claude/projects/**/*.jsonl` | Session history — titles, prompts, models, branch |
 | `~/.claude/projects/*/*/subagents/agent-*.jsonl` | Subagent turns, for the limit windows they bill to |
-| `~/.claude.json` | Per-project rollup metrics *(not read yet)* |
+| `~/.claude.json` | The usage readout Claude Code caches — how full each limit is, and when it resets |
 
 Set `CLAUDE_CONFIG_DIR` (or pass `--claude-dir`) if your Claude data lives
 somewhere other than `~/.claude`. Some Claude Code versions accept a
@@ -499,8 +506,8 @@ the development machine, and the bucket cache is shared with the cards, so which
 you open second is the cheap one.
 
 **The limits** are the one read that has to cover weeks rather than a page, because
-the yardsticks they draw are the heaviest window of the last 7 days and the heaviest
-week of the last 28. It bounds itself the same way: a transcript is append-only, so
+the yardsticks they fall back on are the heaviest window of the last 7 days and the
+heaviest week of the last 28. It bounds itself the same way: a transcript is append-only, so
 one last written before the cutoff cannot hold a record after it, and `mtime` settles
 that without opening anything. The files that survive are then reduced to half-hour
 buckets and memoised per file version — the part that does not change — so only the

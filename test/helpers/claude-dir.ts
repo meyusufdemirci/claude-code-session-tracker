@@ -29,11 +29,22 @@ export interface ClaudeHome {
   /**
    * Writes the account file, where Claude Code caches its own usage readout.
    *
-   * Given a reset, it holds a `cachedUsageUtilization` block pinning the all-models
-   * weekly clock; given a string, it holds that verbatim, for the tests about a file
-   * that says something else or nothing at all.
+   * Given a reading, it holds a `cachedUsageUtilization` block: the all-models weekly
+   * clock, and the five-hour one when the test asks for it. Given a string, it holds
+   * that verbatim, for the tests about a file that says something else or nothing at all.
    */
-  accountFile(value: { weeklyResetsAt: number } | string): Promise<string>;
+  accountFile(value: AccountUsage | string): Promise<string>;
+}
+
+/** What a test wants Claude Code's cached readout to say. */
+export interface AccountUsage {
+  weeklyResetsAt: number;
+  /** How full the weekly bar is. The tests that only care where the week falls leave it. */
+  weeklyPercent?: number;
+  /** The five-hour bar, which the account file carries beside the weekly one. */
+  fiveHour?: { percent: number; resetsAt: number };
+  /** When Claude Code last asked the server. Defaults to the weekly reset. */
+  fetchedAt?: number;
 }
 
 export async function claudeHome(t: TestContext): Promise<ClaudeHome> {
@@ -55,7 +66,7 @@ export async function claudeHome(t: TestContext): Promise<ClaudeHome> {
     accountFile: async (value) => {
       await writeFile(
         config.claudeJsonPath,
-        typeof value === 'string' ? value : JSON.stringify(utilization(value.weeklyResetsAt)),
+        typeof value === 'string' ? value : JSON.stringify(utilization(value)),
       );
       return config.claudeJsonPath;
     },
@@ -68,12 +79,19 @@ export async function claudeHome(t: TestContext): Promise<ClaudeHome> {
 }
 
 /** The shape Claude Code caches its usage readout in, cut down to what is read. */
-function utilization(weeklyResetsAt: number): unknown {
+function utilization(value: AccountUsage): unknown {
+  const fiveHour = value.fiveHour;
   return {
     cachedUsageUtilization: {
-      fetchedAtMs: weeklyResetsAt,
+      fetchedAtMs: value.fetchedAt ?? value.weeklyResetsAt,
       utilization: {
-        seven_day: { utilization: 42, resets_at: new Date(weeklyResetsAt).toISOString() },
+        five_hour: fiveHour
+          ? { utilization: fiveHour.percent, resets_at: new Date(fiveHour.resetsAt).toISOString() }
+          : null,
+        seven_day: {
+          utilization: value.weeklyPercent ?? 42,
+          resets_at: new Date(value.weeklyResetsAt).toISOString(),
+        },
         // The per-model weeks sit right beside it, and are not this limit's clock.
         seven_day_opus: null,
       },

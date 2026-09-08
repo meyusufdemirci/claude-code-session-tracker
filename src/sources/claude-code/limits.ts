@@ -1,6 +1,7 @@
 import type { TrackerConfig } from '../../config.ts';
 import type { FileCache } from '../../core/cache.ts';
 import type {
+  ReportedLimitReading,
   SessionTokenTotals,
   UsageLimit,
   UsageLimits,
@@ -13,7 +14,7 @@ import {
   type FileUsage,
   type UsageBucket,
 } from './buckets.ts';
-import { readWeeklyReset } from './quota.ts';
+import { readReportedUsage, type ReportedLimit } from './quota.ts';
 
 /** The stretch Claude Code bills against, and calls a session limit. */
 const WINDOW_MS = 5 * 60 * 60 * 1000;
@@ -50,6 +51,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * Which project billed a half hour, and which model, is read on the same pass and
  * ignored here: a limit is billed to the account, so the projects are folded
  * together before either clock sees them.
+ *
+ * None of that arithmetic can say how full a window is, because the ceiling it would
+ * be a share of is enforced server-side and never written down. Claude Code's own
+ * cached readout can, and does — so it is read alongside and carried through as
+ * `reported`, which is what keeps this tool and Claude Code quoting the same
+ * percentage for the same window.
  */
 export async function readUsageLimits(
   config: TrackerConfig,
@@ -60,14 +67,38 @@ export async function readUsageLimits(
   // five-hour one a single week, and the files are only worth walking once.
   const since = now - WEEK_HISTORY_DAYS * DAY_MS;
   const buckets = mergeBuckets(await readUsageBuckets(config, cache, { since }));
-  // The one date on this machine that says where the weekly clock falls. Read
+  // Where both clocks actually fall, and how full the server says they are. Read
   // alongside the transcripts because it answers what they cannot.
-  const weeklyReset = await readWeeklyReset(config.claudeJsonPath);
+  const reported = await readReportedUsage(config.claudeJsonPath);
 
   return {
-    session: measureFiveHour(buckets, now),
-    weekly: measureWeekly(buckets, now, weeklyReset),
+    session: measureFiveHour(buckets, now, reported?.session, reported?.fetchedAt),
+    weekly: measureWeekly(buckets, now, reported?.weekly, reported?.fetchedAt),
     generatedAt: now,
+  };
+}
+
+/**
+ * Claude Code's reading, kept only while it still describes the window in progress.
+ *
+ * A percentage outlives its window: the file keeps saying 88% long after the five
+ * hours it was 88% of have emptied, because nothing rewrites it until Claude Code
+ * next asks the server. Past its own reset it is a fact about a window nobody is in,
+ * and the card falls back to the yardstick rather than showing a bar that will not
+ * move until the next prompt.
+ */
+function attachReported(
+  reported: ReportedLimit | undefined,
+  fetchedAt: number | undefined,
+  now: number,
+): { reported: ReportedLimitReading } | undefined {
+  if (!reported || (reported.resetsAt !== undefined && reported.resetsAt <= now)) return undefined;
+  return {
+    reported: {
+      percent: reported.percent,
+      fetchedAt: fetchedAt ?? 0,
+      ...(reported.resetsAt !== undefined ? { resetsAt: reported.resetsAt } : {}),
+    },
   };
 }
 
@@ -78,18 +109,53 @@ export async function readUsageLimits(
  * window of the last seven days, and handing it four weeks would quietly change
  * what the number on the page is a share of.
  */
-function measureFiveHour(buckets: readonly UsageBucket[], now: number): UsageLimit {
+function measureFiveHour(
+  buckets: readonly UsageBucket[],
+  now: number,
+  reported?: ReportedLimit,
+  fetchedAt?: number,
+): UsageLimit {
   const since = now - HISTORY_DAYS * DAY_MS;
-  const windows = chainWindows(buckets.filter((bucket) => bucket.at >= since));
+  const recent = buckets.filter((bucket) => bucket.at >= since);
+  const windows = chainWindows(recent);
   const last = windows.at(-1);
-  const current = last && last.resetsAt > now ? last : undefined;
+  const chained = last && last.resetsAt > now ? last : undefined;
+  // Claude Code's own reset, when it has one, beats a window chained off timestamps:
+  // it is the edge the server is actually billing to, and the span it marks out is
+  // the one the percentage beside it was a percentage of.
+  const current = reportedWindow(recent, reported?.resetsAt, now) ?? chained;
 
   return {
     windowMs: WINDOW_MS,
-    clock: 'chained',
+    clock: current && current !== chained ? 'reported' : 'chained',
     historyDays: HISTORY_DAYS,
-    ...summarize(windows, current, now),
+    ...attachReported(reported, fetchedAt, now),
+    ...summarize(windows, chained, now, current),
   };
+}
+
+/**
+ * The five hours ending at the reset Claude Code reported, filled from the sweep.
+ *
+ * The chain is a good guess at where a window opened — five quiet hours end one — but
+ * it is still a guess, and it is drawn from this machine's transcripts alone. A reported
+ * reset is neither: it is the server's own edge, so the window is counted back five
+ * hours from it and whatever landed inside is what the window holds. Nothing is
+ * returned once that reset has passed, which is a window that has already emptied.
+ */
+function reportedWindow(
+  buckets: readonly UsageBucket[],
+  resetsAt: number | undefined,
+  now: number,
+): UsageWindow | undefined {
+  if (resetsAt === undefined || resetsAt <= now) return undefined;
+
+  const window = emptyWindow(resetsAt - WINDOW_MS, resetsAt, true);
+  for (const bucket of buckets) {
+    if (bucket.at < window.startedAt || bucket.at >= resetsAt) continue;
+    addBucket(window, bucket, bucket.fiveHourLimited);
+  }
+  return window;
 }
 
 /**
@@ -111,9 +177,10 @@ function measureFiveHour(buckets: readonly UsageBucket[], now: number): UsageLim
 function measureWeekly(
   buckets: readonly UsageBucket[],
   now: number,
-  cachedReset?: number,
+  cached?: ReportedLimit,
+  fetchedAt?: number,
 ): UsageLimit {
-  const reported = cachedReset ?? refusedWeeklyReset(buckets);
+  const reported = cached?.resetsAt ?? refusedWeeklyReset(buckets);
   const anchor = reported ?? now;
   const windows = blockWindows(buckets, anchor, reported !== undefined);
   // `now - 1`, not `now`: with no reported reset the anchor *is* now, and the block
@@ -125,6 +192,7 @@ function measureWeekly(
     windowMs: WEEK_MS,
     clock: reported === undefined ? 'rolling' : 'reported',
     historyDays: WEEK_HISTORY_DAYS,
+    ...attachReported(cached, fetchedAt, now),
     ...summarize(windows, current, now),
   };
 }
@@ -134,13 +202,17 @@ function summarize(
   windows: readonly UsageWindow[],
   current: UsageWindow | undefined,
   now: number,
+  reportAs: UsageWindow | undefined = current,
 ): Pick<UsageLimit, 'current' | 'reference' | 'lastLimited'> {
   // Last, not heaviest: a refusal is only evidence of where the ceiling was at the
   // time, and the most recent one is the closest that evidence gets to today.
   const lastLimited = windows.filter((window) => window.limited).at(-1);
 
   return {
-    ...(current ? { current } : {}),
+    // Which window is reported and which one the yardstick must skip can differ:
+    // a reported five-hour window is not one of `windows`, and the chained window
+    // it stands in for is still the one that must never become its own denominator.
+    ...(reportAs ? { current: reportAs } : {}),
     ...(pickReference(windows, current, now) ?? {}),
     ...(lastLimited ? { lastLimited } : {}),
   };
@@ -187,28 +259,43 @@ function blockWindows(
     const start = blockStart(bucket.at, anchor);
     let block = blocks.get(start);
     if (!block) {
-      block = {
-        startedAt: start,
-        resetsAt: start + WEEK_MS,
-        // Every edge here is Claude's own reset stepped by whole weeks, so when the
-        // anchor came from a refusal, so did this.
-        resetsAtIsReported: anchored,
-        tokens: { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 },
-        turns: 0,
-        limited: false,
-      };
+      // Every edge here is Claude's own reset stepped by whole weeks, so when the
+      // anchor came from a refusal, so did this.
+      block = emptyWindow(start, start + WEEK_MS, anchored);
       blocks.set(start, block);
     }
 
-    block.tokens.input += bucket.tokens.input;
-    block.tokens.output += bucket.tokens.output;
-    block.tokens.cacheRead += bucket.tokens.cacheRead;
-    block.tokens.cacheCreate += bucket.tokens.cacheCreate;
-    block.turns += bucket.turns;
-    if (bucket.weeklyLimited) block.limited = true;
+    addBucket(block, bucket, bucket.weeklyLimited);
   }
 
   return [...blocks.values()].sort((a, b) => a.startedAt - b.startedAt);
+}
+
+/** A window with its edges settled and nothing in it yet. */
+function emptyWindow(startedAt: number, resetsAt: number, resetsAtIsReported: boolean): UsageWindow {
+  return {
+    startedAt,
+    resetsAt,
+    resetsAtIsReported,
+    tokens: { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 },
+    turns: 0,
+    limited: false,
+  };
+}
+
+/**
+ * Fold one half hour into a window.
+ *
+ * Which refusal marks a window limited is the caller's business — the same bucket
+ * carries a five-hour flag and a weekly one, and each clock only answers for its own.
+ */
+function addBucket(window: UsageWindow, bucket: UsageBucket, limited: boolean): void {
+  window.tokens.input += bucket.tokens.input;
+  window.tokens.output += bucket.tokens.output;
+  window.tokens.cacheRead += bucket.tokens.cacheRead;
+  window.tokens.cacheCreate += bucket.tokens.cacheCreate;
+  window.turns += bucket.turns;
+  if (limited) window.limited = true;
 }
 
 /** Which week `at` falls in, counting in whole weeks from `anchor` in either direction. */
@@ -244,23 +331,11 @@ function chainWindows(buckets: readonly UsageBucket[]): UsageWindow[] {
 
   for (const bucket of buckets) {
     if (!open || bucket.at >= open.resetsAt) {
-      open = {
-        startedAt: bucket.at,
-        resetsAt: bucket.at + WINDOW_MS,
-        resetsAtIsReported: false,
-        tokens: { input: 0, output: 0, cacheRead: 0, cacheCreate: 0 },
-        turns: 0,
-        limited: false,
-      };
+      open = emptyWindow(bucket.at, bucket.at + WINDOW_MS, false);
       windows.push(open);
     }
 
-    open.tokens.input += bucket.tokens.input;
-    open.tokens.output += bucket.tokens.output;
-    open.tokens.cacheRead += bucket.tokens.cacheRead;
-    open.tokens.cacheCreate += bucket.tokens.cacheCreate;
-    open.turns += bucket.turns;
-    if (bucket.fiveHourLimited) open.limited = true;
+    addBucket(open, bucket, bucket.fiveHourLimited);
     // Claude told us when this one empties, which beats deriving it from a rounded
     // start. Later buckets are then chained against Claude's answer, not ours.
     if (bucket.fiveHourResetsAt !== undefined) {

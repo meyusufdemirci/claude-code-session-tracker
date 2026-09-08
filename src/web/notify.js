@@ -363,7 +363,7 @@ export function quietFor(scope, now = Date.now()) {
  * Send one, unless this scope has spoken recently enough.
  *
  * `renderLimits` runs every second, and every one of those seconds a window over its
- * yardstick is still over it. What decides whether any of them becomes a notification
+ * limit is still over it. What decides whether any of them becomes a notification
  * is the clock and nothing else: the first one through fires, and the rest of the
  * interval belongs to the reader. A window that drops back under the line and climbs
  * over it again inside that interval is the same interruption arriving twice, so it
