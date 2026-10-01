@@ -1,0 +1,68 @@
+# The macOS menu bar app and its widget. `./build.sh` generates the Xcode project
+# from this with XcodeGen and builds it; the project itself is not checked in.
+name: SessionTracker
+options:
+  bundleIdPrefix: com.meyusufdemirci
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.8.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    # Signed to run locally. Pass DEVELOPMENT_TEAM to build.sh to sign with a team instead.
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: NO
+    DEAD_CODE_STRIPPING: YES
+targets:
+  SessionTracker:
+    type: application
+    platform: macOS
+    sources: [App, Shared]
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleName: Claude Code Session Tracker
+        CFBundleDisplayName: Claude Code Session Tracker
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSUIElement: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.meyusufdemirci.claude-code-session-tracker
+            CFBundleURLSchemes: [claude-code-session-tracker]
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_NAME: Claude Code Session Tracker
+        PRODUCT_MODULE_NAME: SessionTracker
+        PRODUCT_BUNDLE_IDENTIFIER: com.meyusufdemirci.claude-code-session-tracker.app
+    dependencies:
+      - target: SessionTrackerWidget
+  SessionTrackerWidget:
+    type: app-extension
+    platform: macOS
+    sources: [Widget, Shared]
+    info:
+      path: Widget/Info.plist
+      properties:
+        CFBundleDisplayName: Claude Code Session Tracker
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    entitlements:
+      path: Widget/Widget.entitlements
+      properties:
+        # Widgets must be sandboxed; the client entitlement lets it reach the tracker on loopback.
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+    settings:
+      base:
+        PRODUCT_NAME: SessionTrackerWidget
+        PRODUCT_BUNDLE_IDENTIFIER: com.meyusufdemirci.claude-code-session-tracker.app.widget
