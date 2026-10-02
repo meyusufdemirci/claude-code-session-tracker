@@ -152,6 +152,58 @@ describe('readUsageHistory', () => {
     strictEqual(history.projects.length, 2);
   });
 
+  it('leaves each project’s own series off unless it is asked for', async (t) => {
+    const home = await claudeHome(t);
+    await home.transcript(APP, sessionId(1), [
+      assistantRecord({ id: 'msg_1', timestamp: iso('09:05'), usage: { output: 10 } }),
+    ]);
+
+    const history = await readUsageHistory(home.config, cache(), paths(), RANGE, NOW);
+
+    strictEqual(history.projects[0]?.buckets, undefined);
+  });
+
+  it('splits the series by project when asked, for the projects it covers', async (t) => {
+    const home = await claudeHome(t);
+    await home.transcript(APP, sessionId(1), [
+      assistantRecord({ id: 'msg_1', timestamp: iso('09:05'), usage: { output: 10 } }),
+    ]);
+    await home.transcript(SITE, sessionId(2), [
+      assistantRecord({ id: 'msg_2', timestamp: iso('09:20'), usage: { output: 4 } }),
+      assistantRecord({ id: 'msg_3', timestamp: iso('11:05'), usage: { output: 1 } }),
+    ]);
+
+    const all = await readUsageHistory(
+      home.config,
+      cache(),
+      paths(),
+      { ...RANGE, perProject: true },
+      NOW,
+    );
+
+    const site = all.projects.find((project) => project.slug === pathToSlug(SITE));
+    deepStrictEqual(
+      site?.buckets?.map((bucket) => [bucket.at, bucket.tokens.output]),
+      [
+        [at('09:00'), 4],
+        [at('11:00'), 1],
+      ],
+    );
+    strictEqual(all.projects.find((project) => project.slug === pathToSlug(APP))?.buckets?.length, 1);
+
+    const narrowed = await readUsageHistory(
+      home.config,
+      cache(),
+      paths(),
+      { ...RANGE, project: pathToSlug(APP), perProject: true },
+      NOW,
+    );
+
+    // Narrowed to one project, the split is that project alone.
+    strictEqual(narrowed.projects.find((project) => project.slug === pathToSlug(SITE))?.buckets, undefined);
+    strictEqual(narrowed.projects.find((project) => project.slug === pathToSlug(APP))?.buckets?.length, 1);
+  });
+
   it('reads a project that billed nothing as an empty series, not as no narrowing', async (t) => {
     const home = await claudeHome(t);
     await home.transcript(APP, sessionId(1), [
@@ -211,20 +263,20 @@ describe('readUsageHistory', () => {
     deepStrictEqual(history.range, { since: NOW - 3 * DAY_MS, until: NOW });
   });
 
-  it('narrows a range wider than ninety days, and says it did', async (t) => {
+  it('narrows a range wider than a year and a week, and says it did', async (t) => {
     const home = await claudeHome(t);
 
     const history = await readUsageHistory(
       home.config,
       cache(),
       paths(),
-      { since: NOW - 365 * DAY_MS },
+      { since: NOW - 730 * DAY_MS },
       NOW,
     );
 
     // The range on the way back is the one that was read, so a page cannot draw an
-    // axis a year wide over three months of data.
-    strictEqual(history.range.since, NOW - 90 * DAY_MS);
+    // axis two years wide over one year of data.
+    strictEqual(history.range.since, NOW - 371 * DAY_MS);
   });
 
   it('reads a backwards range as an empty one rather than refusing it', async (t) => {

@@ -111,6 +111,8 @@ async function handle(
       // against the slugs the source itself reported and used to filter what was
       // already read, so there is no path here for a caller to point anywhere.
       project: url.searchParams.get('project') ?? undefined,
+      // Only the export asks: the page itself draws the merged series alone.
+      perProject: url.searchParams.get('perProject') === '1' || undefined,
     });
     if (!history) {
       sendJson(res, 404, { error: 'No source can measure usage history' });

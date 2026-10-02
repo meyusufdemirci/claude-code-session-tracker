@@ -347,7 +347,8 @@ footer { font-size: .75rem; color: var(--ink-faint); border-top: 1px solid var(-
   cursor: pointer;
 }
 
-.reset:hover { border-color: var(--accent); color: var(--accent); }
+.reset:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.reset:disabled { opacity: .5; cursor: default; }
 .reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* ------------------------------------------------------------------ panel */
@@ -1161,12 +1162,21 @@ kbd {
 .day[data-limited] .day-bar { box-shadow: inset 0 -2px 0 var(--bad); }
 
 .day-label {
+  /* A fixed line whether or not the column carries a label: an empty one collapsing
+     to nothing is what sat the labelled columns' bars higher than their neighbours. */
+  height: .9rem;
+  line-height: .9rem;
   font-size: .6rem;
   color: var(--ink-faint);
-  text-align: center;
+  /* Left-aligned and allowed to run over the next columns, which are unlabelled:
+     centred, a label wider than its column would spill out of the chart's left edge. */
+  text-align: left;
   white-space: nowrap;
+  overflow: visible;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+.days-hint { margin: -.4rem 0 .9rem; }
 
 /* Half hours across, weekdays down. Monday first, as a week of work reads. */
 .hours { display: flex; flex-direction: column; gap: 2px; min-width: 30rem; }
@@ -1349,3 +1359,188 @@ kbd {
 
 /* The drawer is a narrow column; the panel's measure would run past it. */
 .drawer .advice-note { margin-top: 0; max-width: none; }
+
+/* A day per cell, weeks across and weekdays down — the shape of a contribution graph.
+   Columns are sized by the grid rather than by the cells, so 53 weeks fill the panel. */
+.year {
+  display: grid;
+  /* The week count is set from the script: a calendar year spans 53 or 54. */
+  grid-template-columns: 2.2rem repeat(53, minmax(0, 1fr));
+  grid-template-rows: auto repeat(7, auto);
+  grid-auto-flow: column;
+  gap: 3px;
+  min-width: 42rem;
+}
+
+.year-month {
+  grid-row: 1;
+  font-size: .6rem;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  overflow: visible;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.year .hours-day { align-self: center; }
+
+.year-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--rule);
+}
+
+.year-cell[data-level="1"] { background: color-mix(in srgb, var(--accent) 30%, var(--rule)); }
+.year-cell[data-level="2"] { background: color-mix(in srgb, var(--accent) 55%, var(--rule)); }
+.year-cell[data-level="3"] { background: color-mix(in srgb, var(--accent) 78%, var(--rule)); }
+.year-cell[data-level="4"] { background: var(--accent); }
+
+/* Days outside the year, or still to come, keep their slot so the weeks stay
+   aligned, but draw nothing. */
+.year-cell[data-hidden] { visibility: hidden; }
+
+.year-tools { display: flex; align-items: center; gap: .8rem; }
+
+.year-switch { display: inline-flex; align-items: center; gap: .4rem; }
+.year-switch .icon-button { width: 1.7rem; height: 1.7rem; font-size: 1rem; }
+.year-switch .icon-button:disabled { opacity: .35; cursor: default; border-color: var(--rule); color: var(--ink-soft); }
+
+.year-label {
+  min-width: 3.2rem;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.year-hint { margin: -.4rem 0 .9rem; }
+
+.year-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  margin-top: .6rem;
+  font-size: .6rem;
+  color: var(--ink-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.year-legend .year-cell { width: .7rem; }
+.year-legend span:first-child { margin-right: .2rem; }
+.year-legend span:last-child { margin-left: .2rem; }
+
+/* ------------------------------------------------------------------ export */
+
+.export {
+  width: min(30rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 12px 40px rgb(0 0 0 / .22);
+}
+
+/* Black, for the reason the drawer's scrim gives. */
+.export::backdrop { background: rgb(0 0 0 / .45); }
+
+.export form { display: flex; flex-direction: column; gap: 1rem; padding: 1.2rem 1.3rem; }
+.export h2 { margin: 0; font-size: 1.1rem; }
+
+.export h3 {
+  margin: 0 0 .5rem;
+  font: .62rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.export-fields { display: flex; flex-direction: column; gap: .8rem; }
+.export-fields .field select { max-width: 100%; min-width: 0; flex: 1; }
+.export-dates { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+
+.export-formats { margin: 0; padding: 0; border: 0; display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: center; }
+.export-formats legend {
+  float: left;
+  margin-right: .6rem;
+  padding: 0;
+  font: .62rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.export-formats label { display: inline-flex; align-items: center; gap: .35rem; font-size: .85rem; cursor: pointer; }
+.export-formats input { accent-color: var(--accent); margin: 0; }
+
+.export-summary { padding: .9rem 1rem; border-radius: 4px; background: var(--zebra); }
+.export-facts { margin: 0 0 .6rem; display: grid; grid-template-columns: auto 1fr; gap: .25rem .9rem; font-size: .85rem; }
+.export-facts > div { display: contents; }
+.export-facts dt { font-size: .62rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); align-self: center; }
+.export-facts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.export-summary ul { margin: 0; padding-left: 1.1rem; font-size: .82rem; color: var(--ink-soft); }
+
+.export-error { margin: 0; font-size: .82rem; color: var(--bad); }
+
+.export-actions { display: flex; justify-content: flex-end; gap: .6rem; }
+
+.export-go {
+  padding: .35rem .9rem;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--accent);
+  color: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .68rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.export-go:hover { filter: brightness(1.06); }
+.export-go:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.export-go:disabled { opacity: .6; cursor: progress; }
+
+/* ------------------------------------------------------------------- share */
+
+.share { width: min(44rem, calc(100vw - 2rem)); }
+
+.share-body { display: flex; flex-direction: column; gap: .9rem; padding: 1.2rem 1.3rem; }
+
+.share-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+
+.share-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+
+.share-targets { display: flex; flex-wrap: wrap; gap: .6rem; }
+
+.share-target {
+  flex: 1 1 12rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  padding: .65rem 1rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.share-target svg { width: 1.05rem; height: 1.05rem; fill: currentColor; }
+.share-target:hover { border-color: var(--accent); color: var(--accent); }
+.share-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.share-status { margin: 0; font-size: .82rem; color: var(--ink-soft); min-height: 1.2em; }
+.share-status:empty { display: none; }
+
+.share-download { align-self: flex-start; font-size: .8rem; color: var(--ink-faint); }
+.share-download:hover { color: var(--accent); }

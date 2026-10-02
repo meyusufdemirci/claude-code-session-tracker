@@ -55,6 +55,8 @@ export interface UsageQuery {
   until?: number;
   /** Narrow the series to one project, by the slug the source itself reported. */
   project?: string;
+  /** Carry each project's own series as well, for the projects the series covers. */
+  perProject?: boolean;
 }
 
 /**

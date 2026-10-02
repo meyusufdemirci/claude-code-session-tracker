@@ -339,6 +339,14 @@ export interface UsageHistoryProject {
   path: string;
   tokens: SessionTokenTotals;
   turns: number;
+  /**
+   * This project's own series, oldest first — only when `perProject` was asked for.
+   *
+   * Left off by default: the page draws one merged series, and repeating every half
+   * hour once per project would multiply the payload for a reading nobody drew. An
+   * export is the one caller that needs to split a day by project.
+   */
+  buckets?: UsageHistoryBucket[];
 }
 
 /** One model's share of the range. */

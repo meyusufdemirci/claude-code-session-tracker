@@ -213,7 +213,17 @@ describe('GET /api/usage/history', () => {
       since: 1_000,
       until: 2_000,
       project: '-Users-y-Work-app',
+      perProject: undefined,
     });
+  });
+
+  it('asks for the per-project series only when the caller does', async (t) => {
+    const measuring = new FakeSource({ usage });
+    const server = await startServer(t, [measuring]);
+
+    await server.fetch('/api/usage/history?perProject=1');
+
+    strictEqual(measuring.usageQueries.at(-1)?.perProject, true);
   });
 
   it('passes on the ends it was not given rather than inventing them', async (t) => {
@@ -227,6 +237,7 @@ describe('GET /api/usage/history', () => {
       since: undefined,
       until: undefined,
       project: undefined,
+      perProject: undefined,
     });
   });
 

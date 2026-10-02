@@ -24,6 +24,37 @@
         </nav>
       </div>
       <div class="masthead-side">
+        <!-- Out here rather than in a panel: the range governs every section below,
+             not just the first one. -->
+        <div class="filters">
+          <label class="field">
+            <span>Range</span>
+            <select id="range">
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </label>
+
+          <!-- Revealed only by the Custom option; either end may be left empty. -->
+          <label class="field" id="from-field" hidden>
+            <span>From</span>
+            <input type="date" id="range-from" />
+          </label>
+          <label class="field" id="to-field" hidden>
+            <span>To</span>
+            <input type="date" id="range-to" />
+          </label>
+
+          <!-- The page does not poll, so re-reading is something you ask for. -->
+          <button type="button" class="reset" id="refresh" title="Read the transcripts again">
+            Refresh
+          </button>
+          <button type="button" class="reset" id="export" disabled title="Save this range as a PDF or a spreadsheet">
+            Export
+          </button>
+        </div>
         <div class="segmented" id="theme" role="group" aria-label="Colour theme">
           <button type="button" data-theme-choice="system" aria-pressed="false">Auto</button>
           <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
@@ -54,33 +85,6 @@
         <section class="panel" id="summary-panel">
           <div class="panel-head">
             <h2>Range</h2>
-
-            <div class="filters">
-              <label class="field">
-                <span>Range</span>
-                <select id="range">
-                  <option value="7d">Last 7 days</option>
-                  <option value="30d">Last 30 days</option>
-                  <option value="90d">Last 90 days</option>
-                  <option value="custom">Custom…</option>
-                </select>
-              </label>
-
-              <!-- Revealed only by the Custom option; either end may be left empty. -->
-              <label class="field" id="from-field" hidden>
-                <span>From</span>
-                <input type="date" id="range-from" />
-              </label>
-              <label class="field" id="to-field" hidden>
-                <span>To</span>
-                <input type="date" id="range-to" />
-              </label>
-
-              <!-- The page does not poll, so re-reading is something you ask for. -->
-              <button type="button" class="reset" id="refresh" title="Read the transcripts again">
-                Refresh
-              </button>
-            </div>
           </div>
 
           <p class="hint range-line" id="range-line"></p>
@@ -122,9 +126,14 @@
 
         <section class="panel">
           <div class="panel-head">
-            <h2>Spend per day <span class="count" id="days-count"></span></h2>
-            <p class="hint">Billed tokens per local day. A mark under a bar is a turn Claude refused.</p>
+            <h2><span id="days-title">Spend per day</span> <span class="count" id="days-count"></span></h2>
+            <div class="segmented" id="group" role="group" aria-label="Bar per">
+              <button type="button" data-group="day" aria-pressed="true">Day</button>
+              <button type="button" data-group="week" aria-pressed="false">Week</button>
+              <button type="button" data-group="month" aria-pressed="false">Month</button>
+            </div>
           </div>
+          <p class="hint days-hint" id="days-hint">Billed tokens per local day. A mark under a bar is a turn Claude refused.</p>
 
           <div class="days" id="days"></div>
         </section>
@@ -142,6 +151,42 @@
                inside the panel rather than making the page scroll sideways. -->
           <div class="scroller">
             <div class="hours" id="hours"></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Year <span class="count" id="year-count"></span></h2>
+
+            <div class="year-tools">
+              <!-- A calendar year at a time, whatever the range above. -->
+              <div class="year-switch" role="group" aria-label="Year">
+                <button type="button" class="icon-button" id="year-prev" aria-label="Previous year">‹</button>
+                <span class="year-label" id="year-label" aria-live="polite"></span>
+                <button type="button" class="icon-button" id="year-next" aria-label="Next year">›</button>
+              </div>
+              <button type="button" class="reset" id="year-share" disabled title="Share this year as an image">
+                Share
+              </button>
+            </div>
+          </div>
+
+          <p class="hint year-hint">Billed tokens per local day. Darker is heavier.</p>
+
+          <p class="empty" id="year-loading">Reading the year…</p>
+
+          <!-- Fifty-three weeks do not fit a phone either; same rule as the grid above. -->
+          <div class="scroller" id="year-wrap" hidden>
+            <div class="year" id="year"></div>
+            <div class="year-legend" aria-hidden="true">
+              <span>Less</span>
+              <span class="year-cell" data-level="0"></span>
+              <span class="year-cell" data-level="1"></span>
+              <span class="year-cell" data-level="2"></span>
+              <span class="year-cell" data-level="3"></span>
+              <span class="year-cell" data-level="4"></span>
+              <span>More</span>
+            </div>
           </div>
         </section>
 
@@ -196,6 +241,110 @@
         <p class="read-at" id="read-at"></p>
       </div>
     </main>
+
+    <!-- Asks before it writes anything: what range, which projects, what is in it. -->
+    <dialog class="export" id="export-dialog" aria-labelledby="export-title">
+      <form id="export-form">
+        <h2 id="export-title">Export report</h2>
+
+        <div class="export-fields">
+          <label class="field">
+            <span>Dates</span>
+            <select id="export-period">
+              <option value="page">As on the page</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="90d">Last 90 days</option>
+              <option value="custom">Custom…</option>
+            </select>
+          </label>
+
+          <!-- Revealed only by Custom, and filled with the page's dates to start from. -->
+          <div class="export-dates" id="export-dates" hidden>
+            <label class="field">
+              <span>From</span>
+              <input type="date" id="export-from" required />
+            </label>
+            <label class="field">
+              <span>To</span>
+              <input type="date" id="export-to" required />
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Rows</span>
+            <select id="export-group">
+              <option value="day">Daily</option>
+              <option value="week">Weekly</option>
+              <option value="month">Monthly</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Projects</span>
+            <select id="export-scope"></select>
+          </label>
+
+          <fieldset class="export-formats">
+            <legend>Format</legend>
+            <label><input type="radio" name="format" value="pdf" checked /> PDF</label>
+            <label><input type="radio" name="format" value="xlsx" /> Excel / Numbers (.xlsx)</label>
+          </fieldset>
+        </div>
+
+        <div class="export-summary">
+          <h3>The report will include</h3>
+          <dl class="export-facts">
+            <div><dt>Dates</dt><dd id="export-range"></dd></div>
+            <div><dt>Projects</dt><dd id="export-projects"></dd></div>
+            <div><dt>Billed</dt><dd id="export-billed"></dd></div>
+          </dl>
+          <ul id="export-contents"></ul>
+        </div>
+
+        <p class="export-error" id="export-error" role="alert" hidden></p>
+
+        <div class="export-actions">
+          <button type="button" class="reset" id="export-cancel">Cancel</button>
+          <!-- Always a PDF, whichever format is picked: it is the one a browser can show. -->
+          <button type="button" class="reset" id="export-preview" title="Open the report as a PDF in a new tab">Preview</button>
+          <button type="submit" class="export-go" id="export-go">Export</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- The year grid as a picture, and where to post it. A share link cannot carry an
+         image, so the picture goes to the clipboard first and is pasted into the post. -->
+    <dialog class="export share" id="share-dialog" aria-labelledby="share-title">
+      <div class="share-body">
+        <div class="share-head">
+          <h2 id="share-title">Share your year</h2>
+          <button type="button" class="icon-button" id="share-close" aria-label="Close">×</button>
+        </div>
+
+        <img class="share-preview" id="share-preview" alt="The year grid, as it will be shared" />
+
+        <p class="hint">
+          X and LinkedIn do not let a link attach an image to a post. Picking a network
+          copies the image, saves it to your downloads, and opens a new post with the
+          caption filled in — then paste the image with ⌘V or Ctrl+V.
+        </p>
+
+        <div class="share-targets">
+          <button type="button" class="share-target" data-target="x">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932ZM17.61 20.644h2.039L6.486 3.24H4.298Z"/></svg>
+            Share on X
+          </button>
+          <button type="button" class="share-target" data-target="linkedin">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.064 2.064 0 1 1 0-4.128 2.064 2.064 0 0 1 0 4.128zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+            Share on LinkedIn
+          </button>
+        </div>
+
+        <p class="share-status" id="share-status" role="status"></p>
+        <a class="share-download" id="share-download" download>Download the image again</a>
+      </div>
+    </dialog>
 
     <script type="module" src="/history.js"></script>
   </body>

@@ -3,6 +3,7 @@ import type { FileCache } from '../../core/cache.ts';
 import type {
   SessionTokenTotals,
   UsageHistory,
+  UsageHistoryBucket,
   UsageHistoryModel,
   UsageHistoryProject,
 } from '../../core/types.ts';
@@ -26,13 +27,12 @@ const DEFAULT_SPAN_MS = 30 * DAY_MS;
 /**
  * The widest range this will read.
  *
- * Not a limit of the arithmetic — the sweep would happily walk a year — but of what
- * can be answered while someone waits. Past three months the transcripts stop being
- * the handful still being appended to and the read stops being warm, so the range is
- * narrowed and `range` on the way back says so rather than the page pretending it
- * asked for what it got.
+ * A year and a week: enough for the history page's year grid, which reads one
+ * calendar year at a time. Past that the read stops being something
+ * to answer while someone waits, so the range is narrowed and `range` on the way back
+ * says so rather than the page pretending it asked for what it got.
  */
-const MAX_SPAN_MS = 90 * DAY_MS;
+const MAX_SPAN_MS = 371 * DAY_MS;
 
 /**
  * Where the tokens went, over the same sweep the limit cards are measured from.
@@ -63,23 +63,30 @@ export async function readUsageHistory(
       ? projects
       : projects.filter((project) => project.slug === query.project);
   const buckets = mergeBuckets(selected);
+  // Only the projects the series covers: a per-project split of a narrowed page is
+  // that one project, and the rest would be payload nobody asked to see.
+  const split = query.perProject ? new Set(selected.map((project) => project.slug)) : undefined;
 
   return {
     range,
     bucketMs: BUCKET_MS,
-    buckets: buckets.map((bucket) => ({
-      at: bucket.at,
-      tokens: bucket.tokens,
-      turns: bucket.turns,
-      limited: bucket.fiveHourLimited || bucket.weeklyLimited,
-    })),
-    projects: await rankProjects(projects, paths),
+    buckets: buckets.map(toWire),
+    projects: await rankProjects(projects, paths, split),
     models: rankModels(buckets),
     // Echoed only when it actually named a project in the range. Asking for a slug
     // that billed nothing is an empty series, and saying so is the honest answer;
     // claiming the narrowing happened would make an empty page look like a quiet one.
     ...(query.project !== undefined && selected.length > 0 ? { project: query.project } : {}),
     generatedAt: now,
+  };
+}
+
+function toWire(bucket: UsageBucket): UsageHistoryBucket {
+  return {
+    at: bucket.at,
+    tokens: bucket.tokens,
+    turns: bucket.turns,
+    limited: bucket.fiveHourLimited || bucket.weeklyLimited,
   };
 }
 
@@ -100,6 +107,7 @@ function resolveRange(query: UsageQuery, now: number): { since: number; until: n
 async function rankProjects(
   projects: readonly ProjectUsage[],
   paths: Map<string, string>,
+  split?: ReadonlySet<string>,
 ): Promise<UsageHistoryProject[]> {
   const ranked = await Promise.all(
     projects.map(async (project) => {
@@ -109,6 +117,7 @@ async function rankProjects(
         name: projectNameFromPath(path),
         path,
         ...totalOf(project.buckets),
+        ...(split?.has(project.slug) ? { buckets: project.buckets.map(toWire) } : {}),
       };
     }),
   );
