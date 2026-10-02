@@ -67,6 +67,8 @@ else — and puts it on one page.
   itemised rather than a single number you cannot act on.
 - **Start at login** on macOS and Windows with `autostart on` — see
   [Start it at login](#start-it-at-login).
+- **A menu bar switch and a widget** on macOS — see
+  [Menu bar and widget](#menu-bar-and-widget-macos).
 - **`--json`** for scripting, and an HTTP API if you would rather build your own.
 - **No dependencies, no install scripts, no writes** to your Claude directory. The
   one network call is Claude Code's own usage endpoint at `api.anthropic.com`, asked
@@ -134,6 +136,54 @@ says which way it is set.
 It needs a copy that stays on disk — Homebrew or `npm install -g` — since `npx`
 and the other one-off runners unpack into a cache they are free to clear. Run
 from one of those, `on` says so and changes nothing.
+
+## Menu bar and widget (macOS)
+
+`macos/` holds a small native app that puts the tracker in the menu bar. Its
+switch turns the tracker on and off, and the panel under it shows both limits, when
+they reset, and the sessions that are running. A widget for the desktop and
+Notification Center shows the same two limits as rings.
+
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/menu-bar-dark.png" />
+    <img width="348" alt="The menu bar panel: a switch that turns the tracker on, the session and weekly limits with how full each is and when it resets, and the running sessions with a working, a waiting and an idle one" src="docs/menu-bar-light.png" />
+  </picture>
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/widget-dark.png" />
+  <img width="602" alt="The widget in its small and medium sizes: rings for the five-hour and weekly limits, and in the medium size the running sessions, when each limit resets and a Stop link" src="docs/widget-light.png" />
+</picture>
+
+```sh
+brew install xcodegen          # once; Xcode itself is needed too
+macos/build.sh install         # builds it, copies it to /Applications and opens it
+```
+
+- **On** starts `claude-code-session-tracker --no-open`, found through your login
+  shell's `PATH`, and its output goes to the same log as `autostart`. When the
+  tracker is not installed, the panel says so and offers **Install and start**,
+  which runs `brew install meyusufdemirci/tap/claude-code-session-tracker` — or
+  `npm install -g claude-code-session-tracker` where there is no Homebrew — and
+  turns it on once that is done.
+- **Off** stops whichever copy is answering — one the app started, one `autostart`
+  started, or one left running in a terminal.
+- The switch is remembered: quit the app with the tracker on, and it turns it back
+  on the next time it opens. **Open at login** in the panel adds the app to Login
+  Items.
+- The widget reads the tracker on loopback every five minutes. It cannot start a
+  process from its sandbox, so clicking it while the tracker is off asks the app to
+  start it; clicking it while it runs opens the page.
+
+To run a source checkout instead of the installed tracker:
+
+```sh
+defaults write com.meyusufdemirci.claude-code-session-tracker.app trackerCommand "node $PWD/src/cli.ts"
+```
+
+It is signed to run locally. Set `DEVELOPMENT_TEAM` before `build.sh` to sign it
+with your own team.
 
 ## Options
 
