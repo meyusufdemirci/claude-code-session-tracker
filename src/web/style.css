@@ -241,6 +241,13 @@ footer { font-size: .75rem; color: var(--ink-faint); border-top: 1px solid var(-
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* On the history page the path is shown whole: sibling repos share every segment
+   but the last, so a clipped path makes them look like one project listed twice. */
+#projects-body .project-path {
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 
 /* Two lines per session: what it was about, then how to recognise it. */
 .session { white-space: normal; min-width: 14rem; }
