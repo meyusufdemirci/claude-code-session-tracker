@@ -1,6 +1,6 @@
 {
   "name": "claude-code-session-tracker",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "See every Claude Code session on your machine in a local dashboard.",
   "keywords": [
     "claude",
