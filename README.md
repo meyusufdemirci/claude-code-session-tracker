@@ -54,9 +54,11 @@ else — and puts it on one page.
   last 3, 7 or 30 days, or a date range of your own, and ordered by recency or by
   token spend.
 - **A history page** at `/history`: where the tokens went over the last 7, 30 or 90
-  days — spend per day, every half hour of the range laid over one week, and every
-  project and model ranked by what they billed. Pick a project and the whole page
-  narrows to it.
+  days — spend per day, week or month, every half hour of the range laid over one
+  week, a calendar year day by day, and every project and model ranked by what they
+  billed. Pick a project and the whole page narrows to it. **Export** writes the
+  range as a PDF or an `.xlsx` spreadsheet, and **Share** turns the year into an
+  image for X or LinkedIn — see [Where the tokens went](#where-the-tokens-went).
 - **A detail panel** per session: message and tool-call counts, token totals,
   elapsed and working time, subagent count, a copyable `claude --resume <id>`,
   and a button that shows the transcript in your file manager.
@@ -202,7 +204,7 @@ can do with `curl`:
 | `GET /api/sessions?sort=` | `recent` (the default), `tokens-desc`, or `tokens-asc`. Ranks the finished sessions across the whole window, not just the page. An unknown value falls back to `recent` |
 | `GET /api/sessions/:id` | One session with `counts`, `tokens`, `models`, `activeMs`, `awaySummary`, and `notes` |
 | `GET /api/limits` | Both limits, as `session` (five hours) and `weekly` (seven days). Each carries `windowMs`, `clock`, `historyDays`, the `current` window, the `recent` stretch the forecast is drawn from, the server's percentage as `reported` when there is one for the window in progress (its `source` says whether this tool fetched it — `server` — or read Claude Code's cached one — `claude-code`), the heaviest closed window as `reference`, and `lastLimited` if Claude ever cut one short. 404 when no source can measure them |
-| `GET /api/usage/history?since=&until=&project=` | Where the tokens went: a sparse half-hour series, every project in the range with its name and directory, and every model, each ranked by billed tokens. Epoch milliseconds again; `since` defaults to 30 days back, `until` to now, and a span wider than 90 days is narrowed — `range` in the reply is always the one actually read. `project` takes a slug from the same reply and narrows the series and the models to it, never the project list. 404 when no source can measure it |
+| `GET /api/usage/history?since=&until=&project=&perProject=` | Where the tokens went: a sparse half-hour series, every project in the range with its name and directory, and every model, each ranked by billed tokens. Epoch milliseconds again; `since` defaults to 30 days back, `until` to now, and a span wider than a year and a week (371 days) is narrowed — `range` in the reply is always the one actually read. `project` takes a slug from the same reply and narrows the series and the models to it, never the project list. `perProject=1` adds each covered project's own half-hour series as `buckets` on its entry — what the export uses to split a day by project; left off, the payload carries only the merged series. 404 when no source can measure it |
 | `GET /api/health` | `ok`, the version, the Node it runs on, the resolved Claude directory, and per-source status |
 | `POST /api/sessions/:id/reveal` | Shows that transcript in your file manager. Requires a loopback `Origin` |
 
@@ -339,28 +341,75 @@ both — so opening it beside a running dashboard costs a `stat` per file.
   <img alt="The history page: a range summary, a bar per day for thirty days, an hour-of-day grid with the busy half hours falling between nine in the morning and eleven at night, and a table of projects ranked by billed tokens" src="docs/history-light.png" />
 </picture>
 
-Four reads, in the order the question gets asked:
+Five reads, in the order the question gets asked:
 
 - **Spend per day**, a bar for every local day in the range — including the quiet
   ones, because a chart that closed the gaps would draw a busy fortnight and a
   scattered month identically. A mark under a bar is a day Claude refused a turn.
+  **Day / Week / Month** beside it folds the bars into Monday-to-Sunday weeks or
+  calendar months, cut to the range at either end, for a range too long to read
+  a day at a time.
 - **Hour of day**, every half hour of the range folded onto one week. This is the
   reading the daily bars cannot give: whether the five-hour window keeps being
   opened at nine in the morning or at eleven at night.
+- **Year**, a calendar year as a grid of days, Monday to Sunday, shaded by billed
+  tokens in four steps cut at the quartiles of the days that billed anything — so
+  the shading tracks your own year rather than a fixed scale. It reads a calendar
+  year whatever the range above says, follows the project picked, and steps back
+  a year at a time with **‹ ›**, as far as 2025. Days still to come are drawn
+  empty, so the current year reads as a whole year.
 - **Projects**, ranked by billed tokens, with cache reads shown apart. Where two
-  checkouts share a directory name the parent goes in front of it. Pick one and the
-  summary, both drawings and the model list narrow to it; pick it again to let go.
+  checkouts share a directory name the parent goes in front of it, and the full
+  path is printed under each. Pick one and the summary, the drawings and the model
+  list narrow to it; pick it again to let go.
 - **Models**, the same ranking, one row each — where an Opus habit shows up.
 
-**Range** is 7, 30 or 90 days, or a pair of dates of your own, and it goes into the
-query string alongside the project — `?range=7d&project=…` — so a reload comes back
-to the same view, a bookmark keeps it, and Back walks the ranges as well as the
-selections. Ranges are whole local days, which is why the day count and the number of
-bars always agree. Ninety days is the ceiling; ask for more and the page reads ninety
-and says that it narrowed.
+**Range**, in the masthead because it governs every section but the year, is 7, 30 or
+90 days, or a pair of dates of your own. It goes into the query string alongside the
+project, the bar grouping and a past year — `?range=7d&group=week&year=2025&project=…`
+— so a reload comes back to the same view, a bookmark keeps it, and Back walks the
+ranges, the years and the selections. Only what differs from the default is written,
+so a plain `/history` stays plain. Ranges are whole local days, which is why the day
+count and the number of bars always agree. A custom range left open at the start
+reaches back ninety days; a year and a week is the ceiling, and asking for more reads
+that much and says that it narrowed.
 
 Nothing on this page polls — a month of history does not move fast enough to be worth
 re-reading every two seconds — so **Refresh** is how you ask for another read.
+
+### Export
+
+**Export** beside Refresh writes a report — built in the page, with no library and
+nothing sent anywhere. A dialog asks first, and says back what the file will hold
+before it is written:
+
+- **Dates** — as on the page, the last 7, 30 or 90 days, or a pair of your own.
+- **Rows** — daily, weekly or monthly; it starts as the bars on the page do.
+- **Projects** — all of them, or one, from the projects that billed in those dates.
+- **Format** — a PDF, or an `.xlsx` that Excel, Numbers and Google Sheets open as
+  their own.
+
+Both formats say the same numbers, because the report is added up once and each
+writer only lays it out: the totals (billed, input, output, cache writes, cache reads,
+turns, projects and active days), every project ranked by billed tokens with its
+share when there is more than one, then each project's rows — one for every day, week
+or month that billed something. The PDF is A4, one table per project with a total row
+and a page count in the footer. The spreadsheet has two sheets, **Summary** and the
+rows, with real numbers and dates, a frozen header and filters, so it sorts and pivots
+like anything else. **Preview** opens the PDF in a new tab and leaves the dialog open.
+
+Files are named for what is in them:
+`claude-code-usage_<project or all-projects>[_weekly|_monthly]_<from>_<to>.pdf`.
+
+### Share your year
+
+**Share** on the year grid draws it as a picture — in the theme on screen, with the
+year, the active days and the tokens billed — and offers **Share on X** and **Share on
+LinkedIn**. Neither network lets a link attach an image, so a click copies the
+picture to the clipboard, saves it to your downloads as `claude-code-<year>.png`, and
+opens a new post with a caption filled in (*My 2026 with Claude Code: 214 active days
+and 1.2B tokens billed.*); paste the image in with ⌘V or Ctrl+V. Nothing is posted
+for you, and nothing leaves the page until you press the network's own Post.
 
 Two things it is honest about rather than quiet about: a project whose directory has
 since been moved or deleted cannot be resolved from the folder name Claude Code
@@ -423,7 +472,9 @@ and rejects requests that are not addressed to a loopback host. Its one outbound
 call is the usage endpoint Claude Code's own `/usage` reads, at
 `api.anthropic.com`, sent only Claude Code's own token and at most every five
 minutes; `--offline` turns it off and the tool then makes no network calls at all.
-There is no telemetry and no update check.
+There is no telemetry and no update check. The history page's export is written in
+the browser and saved to your disk, and **Share** only opens X's or LinkedIn's own
+compose page when you click it — the image goes by your clipboard, never by us.
 
 Transcripts hold your prompts, your paths, and sometimes your secrets. That is why
 the default bind is `127.0.0.1` and why every request has to be addressed to a
@@ -566,7 +617,10 @@ the limit cards throw away — which project billed each half hour, and which mo
 and the first costs nothing at all, since the sweep already walks `projects/<slug>/…`
 and knew the slug it was dropping. A 7-day page is ~450 ms cold and ~15 ms warm on
 the development machine, and the bucket cache is shared with the cards, so whichever
-you open second is the cheap one.
+you open second is the cheap one. The year grid is a read of its own, a calendar
+year at a time, so it is drawn after the rest of the page rather than holding it up;
+past the 28 days the cards keep warm, the first read of a year is cold, and memoised
+after that.
 
 **The limits** are the one read that has to cover weeks rather than a page, because
 the yardsticks they fall back on are the heaviest window of the last 7 days and the

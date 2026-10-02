@@ -95,8 +95,11 @@ claude-code-session-tracker/
 │   │       ├── projects.ts    # C: ~/.claude.json rollup
 │   │       └── slug.ts        # slug ⇄ path decoding
 │   └── web/               # copied verbatim to dist/web
-│       ├── index.html
-│       ├── app.js
+│       ├── index.html     # the dashboard (app.js)
+│       ├── history.html   # where the tokens went (history.js)
+│       ├── settings.html  # notification switches (settings.js, notify.js)
+│       ├── export.js      # the history report as PDF / .xlsx, written by hand
+│       ├── format.js, theme.js
 │       └── style.css
 └── README.md
 ```
@@ -676,7 +679,7 @@ left is the one thing the reader cannot currently say — see below.
 
 | risk | mitigation |
 |---|---|
-| a 90-day sweep is cold and slow the first time | the range is capped, the page says it is reading, and the 28 days the limit cards already warm are free |
+| a long sweep is cold and slow the first time | the range is capped (90 days at first, a year and a week since §10), the page says it is reading, and the 28 days the limit cards already warm are free |
 | `byModel` grows every cached bucket | one small record per model *seen in that half hour* — in practice one, rarely two |
 | a machine with hundreds of projects | the project list is ranked and cut to the top N, with the tail summed into one `other` row |
 | per-day totals disagreeing with the limit cards | both read the same buckets from the same sweep; the only difference is where the edges fall, and the page says which |
@@ -814,3 +817,42 @@ the next tick, without a reload. A refusal snaps both switches back and says why
   Run key on Windows; no admin rights, and `off` removes exactly what `on` wrote. It
   refuses to run from an `npx`/`dlx`/`bunx` cache, which may be cleared before the next
   login.
+
+---
+
+## 10. Since 0.8 — a year grid, sharing, and a report export  ✅ **DONE**
+
+- **The range moved to the masthead.** It governs every section of `/history` but one,
+  so it sits beside Refresh and the new Export rather than inside the first panel.
+- **Bars per day, week or month.** A segmented control on *Spend per day*;
+  `groupDays` in `export.js` folds consecutive days into Monday-to-Sunday weeks or
+  calendar months, each cut to the range at either end, and both the bars and the
+  report use it. The choice goes into the URL as `?group=`.
+- **A year grid.** A calendar year of local days, Monday-first, shaded in four steps
+  cut at the quartiles of the year's active days. Its own fetch (`loadYear`), so it
+  follows the project picked but not the range, and a cold year cannot hold up the
+  sections above it; a stale answer for a year since left is dropped on arrival.
+  `‹ ›` step back to 2025 — Claude Code's first year — and a past year goes into the
+  URL as `?year=`.
+- **The cap went from 90 days to a year and a week** (`MAX_SPAN_MS = 371 days` in
+  `history.ts`), which is what a calendar year read from any weekday needs. The reply
+  still states the range it actually read.
+- **`perProject=1` on `/api/usage/history`.** Adds each covered project's own half-hour
+  series as `buckets`. Off by default: the page draws one merged series, and repeating
+  every half hour per project would multiply the payload for a reading nothing draws.
+  The export is the one caller that needs to split a day by project.
+- **Export, as PDF or `.xlsx`, with no dependency.** `export.js` builds the report
+  once as plain data (`buildReport`) and two writers lay it out: a PDF of text and
+  rules in the two standard fonts every reader carries (WinAnsi-encoded, A4, page
+  footers), and an `.xlsx` that is a stored zip of a few XML files with real dates and
+  numbers, a frozen header and an autofilter. A dialog picks the dates, the rows, the
+  project and the format, says back what the file will hold before writing it, and
+  offers a PDF preview in a new tab — opened before the read so popup blockers count
+  it as the click's.
+- **Share the year.** The grid is redrawn on a canvas in the current theme, with the
+  year, active days and billed tokens, rather than captured. X and LinkedIn take only
+  text through a share link, so a click copies the PNG to the clipboard, saves it to
+  downloads as well, and opens the network's composer with a caption. Nothing is
+  posted on anyone's behalf.
+- **Full project paths on the history page.** Sibling repos share every path segment
+  but the last, so a clipped path made them look like one project listed twice.
