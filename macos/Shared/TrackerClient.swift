@@ -17,31 +17,30 @@ enum TrackerURL {
     static let open = URL(string: "\(scheme)://open")!
 }
 
-// The parts of the API this side reads. Everything else is left undecoded.
+// The parts of the API this side reads. Everything else is left undecoded, and
+// what is read is optional wherever the app can do without it: a field the tracker
+// renames or drops then costs one number, not the whole answer.
 
 struct TokenTotals: Decodable, Hashable {
-    let input: Int
-    let output: Int
-    let cacheRead: Int
-    let cacheCreate: Int
+    let input: Int?
+    let output: Int?
+    let cacheCreate: Int?
 
     /// What a window is billed for — cache reads are not, as on the page.
-    var billed: Int { input + output + cacheCreate }
+    var billed: Int { (input ?? 0) + (output ?? 0) + (cacheCreate ?? 0) }
 }
 
 struct UsageWindow: Decodable, Hashable {
-    let startedAt: Double
-    let resetsAt: Double
-    let tokens: TokenTotals
+    let resetsAt: Double?
+    let tokens: TokenTotals?
 }
 
 struct ReportedReading: Decodable, Hashable {
-    let percent: Double
+    let percent: Double?
     let resetsAt: Double?
 }
 
 struct UsageLimit: Decodable, Hashable {
-    let windowMs: Double
     let current: UsageWindow?
     let reported: ReportedReading?
     let reference: UsageWindow?
@@ -50,12 +49,12 @@ struct UsageLimit: Decodable, Hashable {
     /// percentage when there is one, else this window against the heaviest on record.
     var share: Double? {
         if let percent = reported?.percent { return percent / 100 }
-        guard let ceiling = reference?.tokens.billed, ceiling > 0 else { return nil }
-        return Double(current?.tokens.billed ?? 0) / Double(ceiling)
+        guard let ceiling = reference?.tokens?.billed, ceiling > 0 else { return nil }
+        return Double(current?.tokens?.billed ?? 0) / Double(ceiling)
     }
 
     /// True when `share` is Anthropic's own figure rather than a comparison with history.
-    var isReported: Bool { reported != nil }
+    var isReported: Bool { reported?.percent != nil }
 
     var resetsAt: Date? {
         guard let ms = reported?.resetsAt ?? current?.resetsAt else { return nil }
@@ -69,17 +68,18 @@ struct UsageLimits: Decodable, Hashable {
 }
 
 struct SessionSummary: Decodable, Hashable, Identifiable {
-    struct Project: Decodable, Hashable { let name: String }
-    struct Live: Decodable, Hashable { let pid: Int }
+    struct Project: Decodable, Hashable { let name: String? }
+    struct Live: Decodable, Hashable { let pid: Int? }
 
     let id: String
-    let status: String
+    let status: String?
     let title: String?
     let name: String?
-    let project: Project
+    let project: Project?
     let live: Live?
 
-    var label: String { title ?? name ?? project.name }
+    var projectName: String { project?.name ?? "" }
+    var label: String { title ?? name ?? project?.name ?? id }
 }
 
 struct SessionList: Decodable {
@@ -92,14 +92,33 @@ struct Health: Decodable {
     let claudeDir: String
 }
 
+/// Why a part of a snapshot is missing.
+enum Gap: Hashable {
+    /// The tracker has no such answer: an older one without the endpoint, or nothing to measure.
+    case unavailable
+    /// It answered in a shape this app does not know — the two are out of step.
+    case unreadable
+}
+
 /// Everything the menu and the widget show, read in one go.
 struct TrackerSnapshot: Hashable {
     let port: Int
     let version: String
     let limits: UsageLimits?
+    /// Why `limits` is nil.
+    let limitsGap: Gap?
     /// Sessions with a live process behind them.
     let running: [SessionSummary]
+    /// The session list came back in a shape this app does not know, so `running` is empty rather than true.
+    let sessionsUnreadable: Bool
     let fetchedAt: Date
+
+    /// What to say in place of the limits, so a tracker this app cannot read is not mistaken for a quiet one.
+    var limitsMessage: String {
+        limitsGap == .unreadable
+            ? "The limits could not be read: this app and tracker v\(version) are out of step."
+            : "Tracker v\(version) reports no limits."
+    }
 
     var busy: Int { running.filter { $0.status == "busy" }.count }
     var waiting: Int { running.filter { $0.status == "waiting" }.count }
@@ -136,28 +155,46 @@ enum TrackerClient {
 
     /// The tracker's health, or nil when what answers on `port` is not the tracker.
     static func health(port: Int) async -> Health? {
-        guard let health: Health = await get("/api/health", port: port), health.ok else { return nil }
+        guard case let .value(health) = await get("/api/health", port: port) as Fetched<Health>, health.ok else { return nil }
         return health
     }
 
     static func snapshot(preferredPort: Int? = nil) async -> TrackerSnapshot? {
         guard let (port, health) = await findPort(preferred: preferredPort) else { return nil }
-        let limits: UsageLimits? = await get("/api/limits", port: port)
+        let limits: Fetched<UsageLimits> = await get("/api/limits", port: port)
         // Running sessions come back whatever the limit, so ask for as few others as possible.
-        let list: SessionList? = await get("/api/sessions?limit=1", port: port)
-        let running = list?.sessions.filter { $0.live != nil } ?? []
-        return TrackerSnapshot(port: port, version: health.version, limits: limits, running: running, fetchedAt: Date())
+        let list: Fetched<SessionList> = await get("/api/sessions?limit=1", port: port)
+        return TrackerSnapshot(
+            port: port,
+            version: health.version,
+            limits: limits.value,
+            limitsGap: limits.gap,
+            running: list.value?.sessions.filter { $0.live != nil } ?? [],
+            sessionsUnreadable: list.gap == .unreadable,
+            fetchedAt: Date()
+        )
     }
 
-    private static func get<T: Decodable>(_ path: String, port: Int) async -> T? {
-        guard let url = URL(string: "http://127.0.0.1:\(port)\(path)") else { return nil }
-        do {
-            let (data, response) = try await session.data(from: url)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-            return try JSONDecoder().decode(T.self, from: data)
-        } catch {
-            return nil
+    private enum Fetched<T> {
+        case value(T)
+        case missing(Gap)
+
+        var value: T? {
+            if case let .value(value) = self { value } else { nil }
         }
+
+        var gap: Gap? {
+            if case let .missing(gap) = self { gap } else { nil }
+        }
+    }
+
+    private static func get<T: Decodable>(_ path: String, port: Int) async -> Fetched<T> {
+        guard let url = URL(string: "http://127.0.0.1:\(port)\(path)"),
+              let (data, response) = try? await session.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200
+        else { return .missing(.unavailable) }
+        guard let value = try? JSONDecoder().decode(T.self, from: data) else { return .missing(.unreadable) }
+        return .value(value)
     }
 }
 

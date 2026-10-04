@@ -73,7 +73,7 @@ struct TrackerWidgetView: View {
             VStack(alignment: .leading, spacing: 8) {
                 title
                 Spacer(minLength: 0)
-                Gauges(limits: snapshot.limits, compact: true)
+                Gauges(snapshot: snapshot, compact: true)
                 Spacer(minLength: 0)
                 Sessions(snapshot: snapshot)
             }
@@ -82,7 +82,7 @@ struct TrackerWidgetView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     title
                     Spacer(minLength: 0)
-                    Gauges(limits: snapshot.limits, compact: false)
+                    Gauges(snapshot: snapshot, compact: false)
                 }
                 VStack(alignment: .leading, spacing: 6) {
                     Sessions(snapshot: snapshot)
@@ -120,7 +120,7 @@ struct TrackerWidgetView: View {
             .foregroundStyle(.secondary)
     }
 
-    private func color(for status: String) -> Color {
+    private func color(for status: String?) -> Color {
         switch status {
         case "busy": .green
         case "waiting": .orange
@@ -130,17 +130,17 @@ struct TrackerWidgetView: View {
 }
 
 private struct Gauges: View {
-    let limits: UsageLimits?
+    let snapshot: TrackerSnapshot
     let compact: Bool
 
     var body: some View {
-        if let limits {
+        if let limits = snapshot.limits {
             HStack(spacing: compact ? 10 : 14) {
                 Ring(title: "5h", limit: limits.session, compact: compact)
                 Ring(title: "Week", limit: limits.weekly, compact: compact)
             }
         } else {
-            Text("No limits yet").font(.caption).foregroundStyle(.secondary)
+            Text(snapshot.limitsGap == .unreadable ? "Limits unreadable" : "No limits").font(.caption).foregroundStyle(.secondary)
         }
     }
 }
@@ -177,7 +177,9 @@ private struct Sessions: View {
     let snapshot: TrackerSnapshot
 
     var body: some View {
-        if snapshot.running.isEmpty {
+        if snapshot.sessionsUnreadable {
+            Text("Sessions unreadable").font(.caption2).foregroundStyle(.secondary)
+        } else if snapshot.running.isEmpty {
             Text("No sessions running").font(.caption2).foregroundStyle(.secondary)
         } else {
             HStack(spacing: 6) {

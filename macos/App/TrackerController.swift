@@ -6,7 +6,8 @@ import WidgetKit
 /**
  * Turning the tracker on and off, and keeping an eye on it while it runs.
  *
- * The tracker itself is the CLI, unchanged: on starts it with `--no-open`, off
+ * The tracker itself is the CLI, unchanged: on starts it with `--no-open` — or
+ * asks launchd for the copy `autostart on` set up, when there is one — and off
  * sends it SIGTERM, which it treats as Ctrl+C. Off stops whichever copy is
  * answering — one this app started, one `autostart on` started, or one left
  * running in a terminal — because the switch says whether the tracker is running,
@@ -62,7 +63,11 @@ final class TrackerController: ObservableObject {
         }
         Task {
             await refresh()
-            if wantsRunning, snapshot == nil { await start() }
+            if wantsRunning {
+                if snapshot == nil { await start() }
+            } else {
+                await keepOff()
+            }
         }
     }
 
@@ -98,33 +103,80 @@ final class TrackerController: ObservableObject {
         }
 
         state = .starting
-        let process: Process
-        do {
-            process = try spawnTracker()
-            owned = process
-        } catch {
-            self.error = error.localizedDescription
-            state = .stopped
+        // `autostart on` already names the copy to run, so On brings that one back
+        // rather than whichever copy is first on PATH, which may be another version.
+        if agentLoaded() {
+            let started = kickstartAgent() ? await answered(while: { true }) : false
+            if !started {
+                error = "The tracker did not start. See \(Self.logPath.path)."
+                apply(nil)
+            }
             return
         }
 
-        // Reading a large `~/.claude` the first time can take a few seconds.
+        let process: Process
+        if let owned, owned.isRunning {
+            // Still coming up from an earlier try: wait on it rather than start a second copy.
+            process = owned
+        } else {
+            do {
+                process = try spawnTracker()
+                owned = process
+            } catch {
+                self.error = error.localizedDescription
+                state = .stopped
+                return
+            }
+        }
+
+        if await answered(while: { process.isRunning }) { return }
+        // Read off `process`, not `owned`: its exit handler may already have let go of it.
+        if process.isRunning {
+            // Slow, not gone. It stays owned, so Off and Quit still stop it, and the next refresh picks it up.
+            error = "The tracker is taking a while to start. See \(Self.logPath.path)."
+        } else {
+            if owned === process { owned = nil }
+            if process.terminationStatus == Self.notFoundStatus {
+                notInstalled = true
+            } else {
+                error = "The tracker did not start. See \(Self.logPath.path)."
+            }
+        }
+        apply(nil)
+    }
+
+    /// Wait for the tracker to answer, for as long as `alive` holds. Reading a large `~/.claude` the first time can take a few seconds.
+    private func answered(while alive: () -> Bool) async -> Bool {
         for _ in 0..<40 {
             try? await Task.sleep(for: .milliseconds(250))
             if let snapshot = await TrackerClient.snapshot(preferredPort: lastPort) {
                 apply(snapshot)
+                return true
+            }
+            if !alive() { break }
+        }
+        return false
+    }
+
+    /**
+     * Left off, stay off.
+     *
+     * `autostart on` starts the tracker at every login whatever the switch said,
+     * about when this app opens, so its copy is watched for briefly and stopped. A
+     * copy started any other way was started on purpose and is left alone.
+     */
+    private func keepOff() async {
+        guard agentLoaded() else { return }
+        for _ in 0..<10 {
+            if wantsRunning { return }
+            if let pid = agentPID(),
+               let found = await TrackerClient.findPort(preferred: lastPort),
+               listeners(on: found.port).contains(pid) {
+                await stop()
                 return
             }
-            if !process.isRunning { break }
+            try? await Task.sleep(for: .seconds(2))
         }
-        // Read off `process`, not `owned`: its exit handler may already have let go of it.
-        if !process.isRunning, process.terminationStatus == Self.notFoundStatus {
-            notInstalled = true
-        } else {
-            error = "The tracker did not start. See \(Self.logPath.path)."
-        }
-        owned = nil
-        apply(nil)
     }
 
     /**
@@ -275,6 +327,8 @@ final class TrackerController: ObservableObject {
         try FileManager.default.createDirectory(at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
         if !FileManager.default.fileExists(atPath: log.path) { FileManager.default.createFile(atPath: log.path, contents: nil) }
         let handle = try FileHandle(forWritingTo: log)
+        // The child gets its own copy of the descriptor when it starts, so this one is done with either way.
+        defer { try? handle.close() }
         handle.seekToEndOfFile()
 
         let process = Process()
@@ -290,20 +344,46 @@ final class TrackerController: ObservableObject {
 
     /// The processes listening on a loopback port.
     private func listeners(on port: Int) -> [pid_t] {
-        let lsof = Process()
-        lsof.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        lsof.arguments = ["-nP", "-t", "-iTCP:\(port)", "-sTCP:LISTEN"]
+        run("/usr/sbin/lsof", "-nP", "-t", "-iTCP:\(port)", "-sTCP:LISTEN").output
+            .split(whereSeparator: \.isNewline).compactMap { pid_t($0) }
+    }
+
+    // The LaunchAgent `autostart on` writes
+
+    private static let agentLabel = "com.meyusufdemirci.claude-code-session-tracker"
+    private var agentTarget: String { "gui/\(getuid())/\(Self.agentLabel)" }
+
+    /// Whether `autostart on` has been run, so launchd has a tracker of its own to start.
+    private func agentLoaded() -> Bool {
+        run("/bin/launchctl", "print", agentTarget).status == 0
+    }
+
+    private func kickstartAgent() -> Bool {
+        run("/bin/launchctl", "kickstart", agentTarget).status == 0
+    }
+
+    /// The agent's tracker, nil while it is not running.
+    private func agentPID() -> pid_t? {
+        let output = run("/bin/launchctl", "print", agentTarget).output
+        guard let match = output.firstMatch(of: /\bpid = (\d+)/) else { return nil }
+        return pid_t(match.1)
+    }
+
+    private func run(_ tool: String, _ arguments: String...) -> (status: Int32, output: String) {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: tool)
+        process.arguments = arguments
         let pipe = Pipe()
-        lsof.standardOutput = pipe
-        lsof.standardError = FileHandle.nullDevice
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
         do {
-            try lsof.run()
+            try process.run()
         } catch {
-            return []
+            return (-1, "")
         }
         let output = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        lsof.waitUntilExit()
-        return output.split(whereSeparator: \.isNewline).compactMap { pid_t($0) }
+        process.waitUntilExit()
+        return (process.terminationStatus, output)
     }
 }
 

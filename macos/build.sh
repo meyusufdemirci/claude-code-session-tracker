@@ -14,8 +14,12 @@ APP="Claude Code Session Tracker.app"
 command -v xcodegen >/dev/null 2>&1 || { echo "XcodeGen is needed: brew install xcodegen" >&2; exit 1; }
 xcodegen generate --quiet
 
+# The app carries the tracker's version, read from the one place it is written down.
+version="$(sed -n 's/^  "version": "\(.*\)",$/\1/p' ../package.json)"
+[ -n "$version" ] || { echo "No version found in package.json" >&2; exit 1; }
+
 action="${1:-}"
-set -- -project SessionTracker.xcodeproj -scheme SessionTracker -configuration Release -destination generic/platform=macOS -derivedDataPath build/DerivedData -quiet
+set -- -project SessionTracker.xcodeproj -scheme SessionTracker -configuration Release -destination generic/platform=macOS -derivedDataPath build/DerivedData -quiet MARKETING_VERSION="$version"
 if [ -n "${DEVELOPMENT_TEAM:-}" ]; then
   set -- "$@" DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Development"
 fi

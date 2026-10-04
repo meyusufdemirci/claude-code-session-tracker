@@ -8,7 +8,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "0.8.0"
+    # build.sh passes the version in package.json, so the app is never a release behind.
+    MARKETING_VERSION: "0.0.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     # Signed to run locally. Pass DEVELOPMENT_TEAM to build.sh to sign with a team instead.

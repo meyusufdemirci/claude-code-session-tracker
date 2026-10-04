@@ -14,7 +14,9 @@ struct MenuContent: View {
                     LimitRow(title: "Session limit", limit: limits.session)
                     LimitRow(title: "Weekly limit", limit: limits.weekly)
                 } else {
-                    Text("No limits measured yet.").foregroundStyle(.secondary)
+                    Text(snapshot.limitsMessage)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Divider()
                 sessions(snapshot)
@@ -76,7 +78,11 @@ struct MenuContent: View {
 
     @ViewBuilder
     private func sessions(_ snapshot: TrackerSnapshot) -> some View {
-        if snapshot.running.isEmpty {
+        if snapshot.sessionsUnreadable {
+            Text("The sessions could not be read: this app and tracker v\(snapshot.version) are out of step.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if snapshot.running.isEmpty {
             Text("No Claude Code sessions running.").foregroundStyle(.secondary)
         } else {
             VStack(alignment: .leading, spacing: 6) {
@@ -91,7 +97,7 @@ struct MenuContent: View {
                         Circle().fill(color(for: session.status)).frame(width: 6, height: 6)
                         Text(session.label).lineLimit(1).truncationMode(.tail)
                         Spacer(minLength: 4)
-                        Text(session.project.name).foregroundStyle(.secondary).lineLimit(1)
+                        Text(session.projectName).foregroundStyle(.secondary).lineLimit(1)
                     }
                     .font(.callout)
                 }
@@ -137,7 +143,7 @@ struct MenuContent: View {
         }
     }
 
-    private func color(for status: String) -> Color {
+    private func color(for status: String?) -> Color {
         switch status {
         case "busy": .green
         case "waiting": .orange
