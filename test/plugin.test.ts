@@ -34,7 +34,7 @@ describe('the Claude Code plugin', () => {
     for (const skill of skills) {
       const prompt = readFileSync(new URL(`plugin/skills/${skill}/SKILL.md`, root), 'utf8');
       ok(prompt.includes(`claude-code-session-tracker ${skill}`), `${skill} runs the installed copy`);
-      ok(prompt.includes(`npx -y claude-code-session-tracker@latest ${skill}`), `${skill} falls back to npx`);
+      ok(prompt.includes(`npx -y claude-code-session-tracker@${String(pkg['version'])} ${skill}`), `${skill} falls back to npx at this version, run \`node scripts/plugin-version.mjs\``);
       ok(cli.includes(`argv[0] === '${skill}'`), `the CLI has a ${skill} command`);
     }
   });

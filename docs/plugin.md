@@ -27,7 +27,7 @@
 - Claude runs `/session-tracker:status` by itself when you ask something it answers, such
   as how much of the weekly limit is left. `/session-tracker:open` only runs when you type it.
 - The plugin holds no code of its own. Each command runs this CLI: the copy on your
-  `PATH` when there is one, otherwise `npx claude-code-session-tracker@latest`,
+  `PATH` when there is one, otherwise `npx claude-code-session-tracker` at the plugin's own version,
   which downloads the package the first time. Both need a version that has the
   `status` command, 0.11.0 or later.
 - `/session-tracker:status` starts nothing. A tracker that is already running is asked,
