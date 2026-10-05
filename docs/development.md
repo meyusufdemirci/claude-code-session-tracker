@@ -76,7 +76,7 @@ the folder:
 ```sh
 pnpm build && npm link         # the skills run whatever `claude-code-session-tracker` resolves to
 claude plugin validate --strict ./plugin
-claude --plugin-dir ./plugin   # then /tracker:status
+claude --plugin-dir ./plugin   # then /session-tracker:status
 ```
 
 Releasing is a tag: `npm version <patch|minor|major>` then `git push --follow-tags`.

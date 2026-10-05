@@ -2,7 +2,7 @@
 name: open
 description: Open the Claude Code Session Tracker dashboard in the browser, starting the tracker first if it is not running.
 disable-model-invocation: true
-allowed-tools: Bash(claude-code-session-tracker:*), Bash(npx:*)
+allowed-tools: Bash(claude-code-session-tracker open:*), Bash(npx -y claude-code-session-tracker@latest open:*)
 ---
 
 The Claude Code Session Tracker was asked to open its page, and said:

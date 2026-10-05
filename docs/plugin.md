@@ -2,13 +2,13 @@
 
 ```
 /plugin marketplace add meyusufdemirci/claude-code-session-tracker
-/plugin install tracker@claude-code-session-tracker
+/plugin install session-tracker@claude-code-session-tracker
 ```
 
 | Command | What it does |
 | --- | --- |
-| `/tracker:status` | Prints both limits and when they reset, what today has billed, and the sessions that are running |
-| `/tracker:open` | Opens the page in your browser, starting the tracker first if it is not running |
+| `/session-tracker:status` | Prints both limits and when they reset, what today has billed, and the sessions that are running |
+| `/session-tracker:open` | Opens the page in your browser, starting the tracker first if it is not running |
 
 ```
   Claude Code Session Tracker 0.11.0
@@ -24,15 +24,15 @@
   Dashboard     http://127.0.0.1:3099
 ```
 
-- Claude runs `/tracker:status` by itself when you ask something it answers, such
-  as how much of the weekly limit is left. `/tracker:open` only runs when you type it.
+- Claude runs `/session-tracker:status` by itself when you ask something it answers, such
+  as how much of the weekly limit is left. `/session-tracker:open` only runs when you type it.
 - The plugin holds no code of its own. Each command runs this CLI: the copy on your
   `PATH` when there is one, otherwise `npx claude-code-session-tracker@latest`,
   which downloads the package the first time. Both need a version that has the
   `status` command, 0.11.0 or later.
-- `/tracker:status` starts nothing. A tracker that is already running is asked,
+- `/session-tracker:status` starts nothing. A tracker that is already running is asked,
   and when none is the same numbers are read straight from your Claude directory.
-- `/tracker:open` reuses a tracker that is already running, whoever started it.
+- `/session-tracker:open` reuses a tracker that is already running, whoever started it.
   One it starts keeps running in the background after the command returns, with
   its output in the same log `autostart` writes on macOS and Windows, and under
   `~/.local/state/claude-code-session-tracker/` on Linux. Stop it with the menu bar

@@ -47,7 +47,7 @@ else — and puts it on one page.
 - ✅ **Start at login** on macOS and Windows — [below](#start-it-at-login).
 - ✅ **A menu bar switch and a widget** on macOS —
   [below](#menu-bar-and-widget-macos).
-- ✅ **A Claude Code plugin**: `/tracker:status` and `/tracker:open` —
+- ✅ **A Claude Code plugin**: `/session-tracker:status` and `/session-tracker:open` —
   [below](#inside-claude-code).
 - ✅ **`--json`** for scripting, and an [HTTP API](docs/api.md).
 - ✅ **No dependencies, no install scripts, no writes** to your Claude directory.
@@ -122,13 +122,13 @@ installed. Needs macOS 14 or later. [Details](docs/menu-bar.md)
 
 ```
 /plugin marketplace add meyusufdemirci/claude-code-session-tracker
-/plugin install tracker@claude-code-session-tracker
+/plugin install session-tracker@claude-code-session-tracker
 ```
 
 | Command | What it does |
 | --- | --- |
-| `/tracker:status` | Prints both limits and when they reset, what today has billed, and the sessions that are running |
-| `/tracker:open` | Opens the page in your browser, starting the tracker first if it is not running |
+| `/session-tracker:status` | Prints both limits and when they reset, what today has billed, and the sessions that are running |
+| `/session-tracker:open` | Opens the page in your browser, starting the tracker first if it is not running |
 
 The same two work in any terminal as `claude-code-session-tracker status` and
 `open`. [Details](docs/plugin.md)

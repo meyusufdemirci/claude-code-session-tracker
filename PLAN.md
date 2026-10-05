@@ -879,8 +879,8 @@ Code, as `/tracker`, rather than going to find a browser tab.
   lowest that answers as the tracker wins. That is what keeps `open` from starting a
   second copy beside one that `autostart` or the app already runs. A tracker reading
   a different Claude directory is not asked for numbers, only pointed at.
-- **The plugin is two prompts and no code** (`plugin/`). `/tracker:status` and
-  `/tracker:open` each run the command of the same name inline: the copy on `PATH`
+- **The plugin is two prompts and no code** (`plugin/`). `/session-tracker:status` and
+  `/session-tracker:open` each run the command of the same name inline: the copy on `PATH`
   first, then `npx …@latest`. Skills rather than commands, which is what Claude Code
   now recommends, and `status` may be invoked by Claude itself while `open` may not —
   opening a browser is something the user asks for. Plugin commands are always
@@ -898,7 +898,7 @@ Left out, on purpose:
 
 - **A SessionStart hook that starts the tracker.** The docs do not say whether a
   user is asked before a plugin's hooks run, what the timeout is, or which shell
-  runs them on Windows. `/tracker:open` covers the need on demand; a hook would
+  runs them on Windows. `/session-tracker:open` covers the need on demand; a hook would
   ship as a second, opt-in plugin in the same marketplace.
 - **A `stop` command.** A tracker `open` started is stopped by the menu bar switch
   or by ending the process.

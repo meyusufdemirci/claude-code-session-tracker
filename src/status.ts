@@ -8,7 +8,7 @@ import { VERSION } from './version.ts';
 /**
  * The tracker in a dozen lines of text, for a terminal rather than a browser.
  *
- * This is what the Claude Code plugin's `/tracker:status` prints, so it is written
+ * This is what the Claude Code plugin's `/session-tracker:status` prints, so it is written
  * to be read as it stands: the two limits, what is running, what today cost, and
  * where the page is. A tracker that is already running is asked, because it has the
  * sweep warm; when none is, the same numbers are read straight off the disk, the

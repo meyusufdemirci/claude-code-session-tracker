@@ -10,7 +10,7 @@ import type { Io, Running } from './status.ts';
 /**
  * Opening the page, starting the tracker first when nothing is serving it.
  *
- * This is what the Claude Code plugin's `/tracker:open` runs. A tracker that is
+ * This is what the Claude Code plugin's `/session-tracker:open` runs. A tracker that is
  * already up, whoever started it (a terminal, `autostart on`, the menu bar app), is
  * the one that gets opened, at the port it actually bound, so a second copy is
  * never started beside it on the next port along.

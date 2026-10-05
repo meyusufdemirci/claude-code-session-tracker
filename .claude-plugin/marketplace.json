@@ -9,7 +9,7 @@
   },
   "plugins": [
     {
-      "name": "tracker",
+      "name": "session-tracker",
       "source": "./plugin",
       "description": "See your Claude Code usage limits, running sessions and today's tokens without leaving the terminal, and open the local dashboard."
     }
