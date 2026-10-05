@@ -1,0 +1,40 @@
+name: macOS app
+
+# The menu bar app and its widget. No other job compiles the Swift, so this is the
+# one that notices when it stops building. It runs only when the app could have
+# changed: its own sources, or the version it takes from package.json.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'macos/**'
+      - package.json
+      - .github/workflows/macos.yml
+  pull_request:
+    paths:
+      - 'macos/**'
+      - package.json
+      - .github/workflows/macos.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the app and widget
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The Xcode project is generated, not checked in.
+      - run: brew install xcodegen
+      # Signed to run locally, as build.sh does by default, so no certificate is needed.
+      - run: macos/build.sh
+      - name: The app carries the version in package.json
+        run: |
+          app="macos/build/Claude Code Session Tracker.app"
+          pkg="$(node -p "require('./package.json').version")"
+          for plist in "$app/Contents/Info.plist" "$app/Contents/PlugIns/SessionTrackerWidget.appex/Contents/Info.plist"; do
+            built="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
+            test "$built" = "$pkg" || { echo "$plist is $built, package.json is $pkg"; exit 1; }
+          done

@@ -289,7 +289,9 @@ final class TrackerController: ObservableObject {
      * An app opened from Finder gets launchd's bare PATH, which finds neither the
      * tracker nor the `node` its `#!/usr/bin/env node` asks for. The user's login
      * shell finds both wherever they put them — Homebrew, a global npm prefix, a
-     * version manager — so it is asked rather than guessed at.
+     * version manager — so it is asked rather than guessed at. It is asked as an
+     * interactive shell too: nvm, fnm and the like set PATH from `.zshrc` or
+     * `.bashrc`, which a login shell alone does not read.
      *
      * `defaults write com.meyusufdemirci.claude-code-session-tracker.app trackerCommand
      * 'node ~/src/claude-code-session-tracker/src/cli.ts'` runs another copy instead,
@@ -320,7 +322,7 @@ final class TrackerController: ObservableObject {
     /// What a script exits with when the program it needs is not there — the shell's own "command not found".
     private static let notFoundStatus: Int32 = 127
 
-    /// Run a script in the user's login shell, its output appended to the log.
+    /// Run a script in the user's interactive login shell, its output appended to the log.
     private func loginShell(_ script: String, onExit: @escaping @Sendable (Process) -> Void) throws -> Process {
         let shell = ProcessInfo.processInfo.environment["SHELL"].flatMap { $0.isEmpty ? nil : $0 } ?? "/bin/zsh"
         let log = Self.logPath
@@ -333,7 +335,7 @@ final class TrackerController: ObservableObject {
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = ["-l", "-c", script]
+        process.arguments = ["-l", "-i", "-c", script]
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = handle
         process.standardError = handle
