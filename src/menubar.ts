@@ -15,6 +15,10 @@ import { VERSION } from './version.ts';
  * with before anything is unpacked. Nothing here runs unless the user asks: there
  * is no install script, and the tracker itself never downloads anything.
  *
+ * The app runs the tracker rather than containing it, so `--with-tracker` installs
+ * that too, the way the app's own "Install and start" does, for a copy that was
+ * only fetched for one run.
+ *
  * The app is signed to run locally rather than with a Developer ID. That is enough
  * here because macOS only stops to ask about files a browser marked as downloaded,
  * and nothing this writes is marked.
@@ -23,6 +27,8 @@ import { VERSION } from './version.ts';
 export const APP_NAME = 'Claude Code Session Tracker.app';
 export const BUNDLE_ID = 'com.meyusufdemirci.claude-code-session-tracker.app';
 export const RELEASES = 'https://github.com/meyusufdemirci/claude-code-session-tracker/releases/download';
+export const FORMULA = 'meyusufdemirci/tap/claude-code-session-tracker';
+export const PACKAGE = 'claude-code-session-tracker';
 
 /** macOS 14, the oldest the app is built for, is Darwin 23. */
 const MIN_DARWIN = 23;
@@ -104,6 +110,10 @@ const USAGE = `
     $ claude-code-session-tracker menubar install    Install the macOS menu bar app and widget, or update them
     $ claude-code-session-tracker menubar uninstall  Remove them
     $ claude-code-session-tracker menubar status     Say whether they are installed
+
+  Options
+    --with-tracker  With install: install the tracker itself too, with Homebrew or npm,
+                    when this copy was only fetched for one run (npx and the like)
 `;
 
 interface Io {
@@ -130,6 +140,8 @@ export interface Env {
   fetch: typeof fetch;
   /** Run a program and give back what it printed, or undefined when it failed. */
   run: (command: string, args: string[]) => string | undefined;
+  /** Run a program with its output going to the terminal, and say whether it succeeded. */
+  show: (command: string, args: string[]) => boolean;
 }
 
 function defaultEnv(): Env {
@@ -149,6 +161,14 @@ function defaultEnv(): Env {
         return undefined;
       }
     },
+    show: (command, args) => {
+      try {
+        execFileSync(command, args, { stdio: 'inherit' });
+        return true;
+      } catch {
+        return false;
+      }
+    },
   };
 }
 
@@ -157,6 +177,12 @@ export async function menubar(args: string[], io: Io = defaultIo, overrides: Par
   if (action !== 'install' && action !== 'uninstall' && action !== 'status') {
     (action === undefined || action === '--help' || action === '-h' ? io.out : io.err)(`${USAGE}\n`);
     return action === undefined || action === '--help' || action === '-h' ? 0 : 1;
+  }
+  const options = args.slice(1);
+  const withTracker = options.includes('--with-tracker');
+  if (options.some((option) => option !== '--with-tracker') || (withTracker && action !== 'install')) {
+    io.err(`${USAGE}\n`);
+    return 1;
   }
 
   const env: Env = { ...defaultEnv(), ...overrides };
@@ -167,10 +193,10 @@ export async function menubar(args: string[], io: Io = defaultIo, overrides: Par
 
   if (action === 'status') return status(env, io);
   if (action === 'uninstall') return uninstall(env, io);
-  return install(env, io);
+  return install(env, io, withTracker);
 }
 
-async function install(env: Env, io: Io): Promise<number> {
+async function install(env: Env, io: Io, withTracker: boolean): Promise<number> {
   if (!supportsApp(env.darwinRelease)) {
     io.err('\n  The menu bar app needs macOS 14 or later.\n\n');
     return 1;
@@ -204,6 +230,11 @@ async function install(env: Env, io: Io): Promise<number> {
     return 1;
   }
 
+  // Before the app is put in place, so that it finds the tracker when it opens and
+  // starts it, and so that a failure here leaves the machine as it was.
+  const oneOff = isOneOff(env.cli);
+  if (withTracker && oneOff && !installTracker(env, io)) return 1;
+
   const target = installPath(env);
   const scratch = mkdtempSync(join(tmpdir(), 'cst-menubar-'));
   try {
@@ -230,9 +261,10 @@ async function install(env: Env, io: Io): Promise<number> {
       `\n  ${updating ? 'Updated  ' : 'Installed'}  ${target}  (${env.version})\n\n` +
         '  It is open now: look for the gauge in the menu bar. The widget is in the\n' +
         '  widget gallery under "Claude Code Session Tracker".\n\n' +
-        (isOneOff(env.cli)
+        (oneOff && !withTracker
           ? '  This copy of the tracker was fetched for one run, and the app needs one that\n' +
-            '  stays installed. Its panel offers to install it: choose "Install and start".\n\n'
+            '  stays installed. Its panel offers to install it: choose "Install and start".\n' +
+            '  Or run this again with --with-tracker.\n\n'
           : '') +
         '  Remove it with: claude-code-session-tracker menubar uninstall\n\n',
     );
@@ -243,6 +275,22 @@ async function install(env: Env, io: Io): Promise<number> {
   } finally {
     rmSync(scratch, { recursive: true, force: true });
   }
+}
+
+/**
+ * Install a copy of the tracker that stays on disk, and say whether that worked.
+ *
+ * Homebrew when there is one, since that also brings the `node` it runs on;
+ * otherwise npm, which a copy fetched by `npx` always has. The same choice the
+ * app's "Install and start" makes.
+ */
+function installTracker(env: Env, io: Io): boolean {
+  const [command, args] =
+    env.run('brew', ['--version']) !== undefined ? ['brew', ['install', FORMULA]] : ['npm', ['install', '-g', PACKAGE]];
+  io.out(`\n  Installing the tracker: ${command} ${args.join(' ')}\n\n`);
+  if (env.show(command, args)) return true;
+  io.err(`\n  Could not install the tracker with ${command}, so the app was not installed either.\n\n`);
+  return false;
 }
 
 async function uninstall(env: Env, io: Io): Promise<number> {

@@ -112,7 +112,10 @@ interface Machine {
   own: string;
 }
 
-async function machine(t: TestContext, options: { body?: Uint8Array; status?: number; running?: boolean } = {}): Promise<Machine> {
+async function machine(
+  t: TestContext,
+  options: { body?: Uint8Array; status?: number; running?: boolean; brew?: boolean; installs?: boolean } = {},
+): Promise<Machine> {
   const dir = await tempDir(t);
   const systemApps = await makeDir(dir, 'Applications');
   const home = await makeDir(dir, 'home');
@@ -127,6 +130,7 @@ async function machine(t: TestContext, options: { body?: Uint8Array; status?: nu
     if (command === 'pgrep') return running ? '123\n' : undefined;
     if (command === 'osascript') running = false;
     if (command === 'plutil') return '0.9.0\n';
+    if (command === 'brew') return options.brew === false ? undefined : 'Homebrew 4.4.0\n';
     if (command === 'ditto' && args[0] === '-x') {
       const app = join(args[3] ?? '', APP_NAME);
       mkdirSync(app, { recursive: true });
@@ -151,6 +155,10 @@ async function machine(t: TestContext, options: { body?: Uint8Array; status?: nu
         return new Response(options.body ?? ZIP, { status: options.status ?? 200 });
       }) as typeof fetch,
       run,
+      show: (command, args) => {
+        calls.push([command, ...args]);
+        return options.installs ?? true;
+      },
     },
     calls,
     out,
@@ -161,6 +169,8 @@ async function machine(t: TestContext, options: { body?: Uint8Array; status?: nu
   };
 }
 
+const ONE_OFF = '/Users/a/.npm/_npx/1a2b/node_modules/claude-code-session-tracker/dist/cli.js';
+
 const ran = (m: Machine, command: string): string[][] => m.calls.filter((call) => call[0] === command);
 
 describe('menubar', () => {
@@ -170,6 +180,9 @@ describe('menubar', () => {
     match(m.out.join(''), /menubar install/);
     strictEqual(await menubar(['bogus'], m.io, m.env), 1);
     match(m.err.join(''), /menubar install/);
+    strictEqual(await menubar(['install', '--bogus'], m.io, m.env), 1);
+    strictEqual(await menubar(['uninstall', '--with-tracker'], m.io, m.env), 1);
+    strictEqual(m.calls.length, 0);
   });
 
   it('is for macOS only', async (t) => {
@@ -211,9 +224,41 @@ describe('menubar install', () => {
 
   it('says so when the tracker itself was only fetched for one run', async (t) => {
     const m = await machine(t);
-    const cli = '/Users/a/.npm/_npx/1a2b/node_modules/claude-code-session-tracker/dist/cli.js';
-    strictEqual(await menubar(['install'], m.io, { ...m.env, cli }), 0);
+    strictEqual(await menubar(['install'], m.io, { ...m.env, cli: ONE_OFF }), 0);
     match(m.out.join(''), /Install and start/);
+    match(m.out.join(''), /--with-tracker/);
+    strictEqual(ran(m, 'brew').length, 0);
+  });
+
+  it('installs the tracker too when asked, before the app is put in place', async (t) => {
+    const m = await machine(t);
+    strictEqual(await menubar(['install', '--with-tracker'], m.io, { ...m.env, cli: ONE_OFF }), 0);
+    deepStrictEqual(ran(m, 'brew').at(-1), ['brew', 'install', 'meyusufdemirci/tap/claude-code-session-tracker']);
+    const order = m.calls.map((call) => call.join(' '));
+    ok(order.indexOf('brew install meyusufdemirci/tap/claude-code-session-tracker') < order.findIndex((call) => call.startsWith('ditto')));
+    strictEqual(m.out.join('').includes('Install and start'), false);
+    strictEqual(ran(m, 'open').length, 1);
+  });
+
+  it('installs the tracker with npm where there is no Homebrew', async (t) => {
+    const m = await machine(t, { brew: false });
+    strictEqual(await menubar(['install', '--with-tracker'], m.io, { ...m.env, cli: ONE_OFF }), 0);
+    deepStrictEqual(ran(m, 'npm'), [['npm', 'install', '-g', 'claude-code-session-tracker']]);
+  });
+
+  it('leaves the app alone when the tracker could not be installed', async (t) => {
+    const m = await machine(t, { installs: false });
+    strictEqual(await menubar(['install', '--with-tracker'], m.io, { ...m.env, cli: ONE_OFF }), 1);
+    match(m.err.join(''), /Could not install the tracker with brew/);
+    strictEqual(existsSync(m.shared), false);
+    strictEqual(ran(m, 'open').length, 0);
+  });
+
+  it('has no tracker to install when this copy already stays on disk', async (t) => {
+    const m = await machine(t);
+    strictEqual(await menubar(['install', '--with-tracker'], m.io, m.env), 0);
+    strictEqual(ran(m, 'brew').length, 0);
+    strictEqual(ran(m, 'npm').length, 0);
   });
 
   it('refuses a download that is not the app this version was published with', async (t) => {

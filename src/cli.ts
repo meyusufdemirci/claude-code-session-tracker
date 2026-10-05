@@ -28,6 +28,7 @@ const HELP = `
     autostart off         Stop starting at login
     autostart status      Say whether it starts at login
     menubar install       Install the macOS menu bar app and widget, or update them
+                          --with-tracker installs the tracker too, with Homebrew or npm
     menubar uninstall     Remove them
     menubar status        Say whether they are installed
 
@@ -46,6 +47,7 @@ const HELP = `
   api.anthropic.com, asked with the token Claude Code is signed in with; --offline
   turns it off. \`menubar install\` is the one command that downloads anything: the
   app this version was published with, from this project's GitHub releases.
+  With --with-tracker it also runs \`brew install\` or \`npm install -g\` for the tracker.
   Never writes to the Claude directory. Binds to loopback unless --host says
   otherwise, and refuses requests not addressed to a loopback host.
 `;

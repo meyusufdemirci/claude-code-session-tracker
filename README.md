@@ -146,8 +146,13 @@ sessions that are running. A widget for the desktop and Notification Center show
 the same two limits as rings.
 
 ```sh
-npx claude-code-session-tracker menubar install
+npx claude-code-session-tracker menubar install --with-tracker
 ```
+
+That one command sets up everything from nothing: `--with-tracker` installs the
+tracker itself first — with Homebrew, or `npm install -g` where there is none —
+and the app starts it when it opens. Leave the flag off when the tracker is
+already installed.
 
 <p>
   <picture>
@@ -180,7 +185,9 @@ removes it.
   [Development](#development).
 - **The tracker still has to be installed**, since the app runs it rather than
   containing it. A copy fetched by `npx` is gone when its cache is cleared, so
-  after an `npx` install the panel offers **Install and start**, described below.
+  `--with-tracker` installs one that stays; without it, the panel offers
+  **Install and start**, described below. If the tracker's install fails, the app
+  is not installed either.
 - **On** starts `claude-code-session-tracker --no-open`, found through your login
   shell's `PATH`, and its output goes to the same log as `autostart`. Where
   `autostart on` has been run, it starts that copy instead, so the tracker that
@@ -207,6 +214,7 @@ removes it.
 | `autostart off` | Stop starting at login, and stop the copy it started |
 | `autostart status` | Say whether it starts at login |
 | `menubar install` | Download the macOS menu bar app and widget for this version, install and open them; run again to update |
+| `menubar install --with-tracker` | The same, and install the tracker itself first when this copy came from `npx` or another one-off runner |
 | `menubar uninstall` | Quit the app and remove it |
 | `menubar status` | Say whether the app is installed, and whether it is the tracker's version |
 
@@ -541,7 +549,8 @@ call is the usage endpoint Claude Code's own `/usage` reads, at
 minutes; `--offline` turns it off and the tool then makes no network calls at all.
 There is no telemetry and no update check. The one other download is the one you
 ask for by name: `menubar install` fetches the macOS app from this project's GitHub
-releases, once, and checks it against the checksum the package was published with. The history page's export is written in
+releases, once, and checks it against the checksum the package was published with. With
+`--with-tracker` it also runs `brew install` or `npm install -g` for the tracker itself. The history page's export is written in
 the browser and saved to your disk, and **Share** only opens X's or LinkedIn's own
 compose page when you click it — the image goes by your clipboard, never by us.
 
