@@ -64,6 +64,9 @@ jobs:
           tag="${GITHUB_REF_NAME#v}"
           pkg="$(node -p "require('./package.json').version")"
           test "$tag" = "$pkg" || { echo "tag $tag does not match package.json $pkg"; exit 1; }
+          # `npm version` moves the Claude Code plugin's version too; a tag made by hand may not have.
+          plugin="$(node -p "require('./plugin/.claude-plugin/plugin.json').version")"
+          test "$tag" = "$plugin" || { echo "tag $tag does not match the plugin's $plugin"; exit 1; }
           echo "version=$tag" >> "$GITHUB_OUTPUT"
           # A pre-release such as 0.10.0-rc.1 must not become what `npx` or `brew` hands out.
           case "$tag" in *-*) echo "channel=next" ;; *) echo "channel=latest" ;; esac >> "$GITHUB_OUTPUT"

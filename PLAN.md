@@ -856,3 +856,49 @@ the next tick, without a reload. A refusal snaps both switches back and says why
   posted on anyone's behalf.
 - **Full project paths on the history page.** Sibling repos share every path segment
   but the last, so a clipped path made them look like one project listed twice.
+
+---
+
+## 11. Since 0.10 — status, open, and a Claude Code plugin  ✅ **DONE**
+
+Asked for on the Product Hunt launch: a way to check the tracker from inside Claude
+Code, as `/tracker`, rather than going to find a browser tab.
+
+- **`status`, a summary for a terminal** (`src/status.ts`). A dozen lines: both
+  limits and when they reset, what today billed, the sessions that are running, and
+  where the page is. It asks a running tracker when one answers, since that one has
+  the sweep warm, and otherwise reads the disk the way `--json` does, so nothing has
+  to be started to get an answer. Resets are spans (`3h 14m`), not clock times, so
+  no locale or timezone is involved. It exits 0 with nothing to report, because a
+  skill that runs a command inline drops its whole reply when the command fails.
+- **`open`** (`src/open.ts`). Opens the tracker that is running, at the port it
+  actually bound. When none is, it starts one detached with `--no-open`, waits for
+  it to answer, and opens it from here, so both paths open the same way.
+- **One port finder for both** (`findTracker`). Every port from 3099 to 3119 is
+  asked for `/api/health` at once, the same range the menu bar app scans, and the
+  lowest that answers as the tracker wins. That is what keeps `open` from starting a
+  second copy beside one that `autostart` or the app already runs. A tracker reading
+  a different Claude directory is not asked for numbers, only pointed at.
+- **The plugin is two prompts and no code** (`plugin/`). `/tracker:status` and
+  `/tracker:open` each run the command of the same name inline: the copy on `PATH`
+  first, then `npx …@latest`. Skills rather than commands, which is what Claude Code
+  now recommends, and `status` may be invoked by Claude itself while `open` may not —
+  opening a browser is something the user asks for. Plugin commands are always
+  namespaced, so the plugin is named `tracker` to make `/tracker` the thing to type.
+- **The repository is its own marketplace** (`.claude-plugin/marketplace.json`,
+  `source: ./plugin`). The plugin sits in a subfolder so installing it does not
+  bring the source tree along.
+- **The plugin's version follows the package's.** `npm version` runs
+  `scripts/plugin-version.mjs` before it commits, `test/plugin.test.ts` fails when
+  they differ, and the release stops at a tag whose plugin was left behind.
+- **Release order matters once.** The skills fall back to `npx …@latest`, so the
+  plugin must not be announced before a version with `status` is `latest` on npm.
+
+Left out, on purpose:
+
+- **A SessionStart hook that starts the tracker.** The docs do not say whether a
+  user is asked before a plugin's hooks run, what the timeout is, or which shell
+  runs them on Windows. `/tracker:open` covers the need on demand; a hook would
+  ship as a second, opt-in plugin in the same marketplace.
+- **A `stop` command.** A tracker `open` started is stopped by the menu bar switch
+  or by ending the process.

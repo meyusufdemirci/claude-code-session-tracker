@@ -1,0 +1,18 @@
+{
+  "name": "tracker",
+  "version": "0.10.0",
+  "description": "See your Claude Code usage limits, running sessions and today's tokens without leaving the terminal, and open the local dashboard.",
+  "author": {
+    "name": "Yusuf Demirci",
+    "url": "https://github.com/meyusufdemirci"
+  },
+  "homepage": "https://github.com/meyusufdemirci/claude-code-session-tracker#readme",
+  "repository": "https://github.com/meyusufdemirci/claude-code-session-tracker",
+  "license": "MIT",
+  "keywords": [
+    "usage",
+    "limits",
+    "sessions",
+    "dashboard"
+  ]
+}

@@ -69,6 +69,9 @@ else — and puts it on one page.
   [Start it at login](#start-it-at-login).
 - **A menu bar switch and a widget** on macOS, installed with `menubar install` —
   see [Menu bar and widget](#menu-bar-and-widget-macos).
+- **A Claude Code plugin**: `/tracker:status` prints the limits and the running
+  sessions in the session you are already in, and `/tracker:open` opens the page —
+  see [Inside Claude Code](#inside-claude-code).
 - **`--json`** for scripting, and an HTTP API if you would rather build your own.
 - **No dependencies, no install scripts, no writes** to your Claude directory. The
   tracker's one network call is Claude Code's own usage endpoint at
@@ -206,10 +209,58 @@ removes it.
   process from its sandbox, so clicking it while the tracker is off asks the app to
   start it; clicking it while it runs opens the page.
 
+## Inside Claude Code
+
+A plugin puts the tracker one slash command away, in the session you are already
+working in. Add this repository as a marketplace and install it:
+
+```
+/plugin marketplace add meyusufdemirci/claude-code-session-tracker
+/plugin install tracker@claude-code-session-tracker
+```
+
+| Command | What it does |
+| --- | --- |
+| `/tracker:status` | Prints both limits and when they reset, what today has billed, and the sessions that are running |
+| `/tracker:open` | Opens the page in your browser, starting the tracker first if it is not running |
+
+```
+  Claude Code Session Tracker 0.11.0
+
+  5-hour limit  12% used, resets in 3h
+  Weekly limit  12% used, resets in 4d 9h
+  Today         3.9M tokens in 637 turns
+
+  Running       2 sessions
+    busy     my-app      Add the export dialog
+    waiting  my-api      Fix the flaky login test (input needed)
+
+  Dashboard     http://127.0.0.1:3099
+```
+
+- Claude runs `/tracker:status` by itself when you ask something it answers, such
+  as how much of the weekly limit is left. `/tracker:open` only runs when you type it.
+- The plugin holds no code of its own. Each command runs this CLI: the copy on your
+  `PATH` when there is one, otherwise `npx claude-code-session-tracker@latest`,
+  which downloads the package the first time. Both need a version that has the
+  `status` command, 0.11.0 or later.
+- `/tracker:status` starts nothing. A tracker that is already running is asked,
+  and when none is the same numbers are read straight from your Claude directory.
+- `/tracker:open` reuses a tracker that is already running, whoever started it.
+  One it starts keeps running in the background after the command returns, with
+  its output in the same log `autostart` writes on macOS and Windows, and under
+  `~/.local/state/claude-code-session-tracker/` on Linux. Stop it with the menu bar
+  switch, or by ending the `claude-code-session-tracker` process.
+
+The same two commands work in any terminal, as `claude-code-session-tracker status`
+and `claude-code-session-tracker open`.
+
 ## Options
 
 | Command | Description |
 | --- | --- |
+| `status` | Print both limits, what today has billed and the running sessions, from a running tracker or straight from disk. Takes `--claude-dir` and `--offline` |
+| `open` | Open the page, starting the tracker in the background first if it is not running |
 | `autostart on` | Start at login and open the page, and start it now (macOS and Windows) |
 | `autostart off` | Stop starting at login, and stop the copy it started |
 | `autostart status` | Say whether it starts at login |
@@ -665,7 +716,23 @@ ditto -c -k --keepParent "macos/build/Claude Code Session Tracker.app" app.zip
 node scripts/menubar-check.mjs app.zip /tmp/Applications   # omit the folder to use /Applications
 ```
 
+The Claude Code plugin lives in `plugin/`, and `.claude-plugin/marketplace.json` at
+the root is what makes this repository a marketplace for it. Its two skills only
+run the `status` and `open` commands, so `test/status.test.ts` and
+`test/open.test.ts` are where their behaviour is tested, and `test/plugin.test.ts`
+checks the plugin has not drifted from the package: same version, same command
+names. To try it against a source checkout, put the build on your `PATH` and load
+the folder:
+
+```sh
+pnpm build && npm link         # the skills run whatever `claude-code-session-tracker` resolves to
+claude plugin validate --strict ./plugin
+claude --plugin-dir ./plugin   # then /tracker:status
+```
+
 Releasing is a tag: `npm version <patch|minor|major>` then `git push --follow-tags`.
+`npm version` gives the plugin the same version before it commits, and the release
+stops at a tag whose plugin was left behind.
 The release workflow builds the menu bar app first, writes its zip's checksum into
 the package as `dist/menubar.json`, re-runs the checks, attaches the zip to a GitHub
 release for the tag, publishes with npm provenance, and then moves the Homebrew tap

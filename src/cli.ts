@@ -7,7 +7,9 @@ import { createConfig, DEFAULT_HOST, DEFAULT_PORT } from './config.ts';
 import { SessionRegistry } from './core/registry.ts';
 import { openBrowser } from './desktop.ts';
 import { menubar } from './menubar.ts';
+import { open } from './open.ts';
 import { createServer, listen } from './server.ts';
+import { status } from './status.ts';
 import { VERSION } from './version.ts';
 
 /** Anything else means the dashboard is reachable from off this machine. */
@@ -20,10 +22,13 @@ const HELP = `
 
   Usage
     $ npx claude-code-session-tracker [options]
+    $ claude-code-session-tracker status|open
     $ claude-code-session-tracker autostart on|off|status
     $ claude-code-session-tracker menubar install|uninstall|status
 
   Commands
+    status                Print the limits, the running sessions and today's tokens
+    open                  Open the page, starting the tracker first if it is not running
     autostart on          Start at login and open the page (macOS and Windows)
     autostart off         Stop starting at login
     autostart status      Say whether it starts at login
@@ -55,6 +60,8 @@ const HELP = `
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (argv[0] === 'autostart') return autostart(argv.slice(1));
   if (argv[0] === 'menubar') return menubar(argv.slice(1));
+  if (argv[0] === 'status') return status(argv.slice(1));
+  if (argv[0] === 'open') return open(argv.slice(1));
 
   let values;
   try {

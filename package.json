@@ -55,6 +55,7 @@
     "smoke": "node scripts/smoke.mjs",
     "formula": "node scripts/formula.mjs",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "version": "node scripts/plugin-version.mjs && git add plugin/.claude-plugin/plugin.json",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "devDependencies": {

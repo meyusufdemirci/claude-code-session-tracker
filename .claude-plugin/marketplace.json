@@ -1,0 +1,17 @@
+{
+  "name": "claude-code-session-tracker",
+  "owner": {
+    "name": "Yusuf Demirci",
+    "url": "https://github.com/meyusufdemirci"
+  },
+  "metadata": {
+    "description": "The Claude Code Session Tracker, from inside Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "tracker",
+      "source": "./plugin",
+      "description": "See your Claude Code usage limits, running sessions and today's tokens without leaving the terminal, and open the local dashboard."
+    }
+  ]
+}

@@ -103,7 +103,7 @@ try {
 
   check('--help lists the flags', () => {
     const help = cli(['--help']);
-    for (const flag of ['--json', '--port', '--claude-dir', '--no-open']) {
+    for (const flag of ['--json', '--port', '--claude-dir', '--no-open', 'status', 'open']) {
       if (!help.includes(flag)) throw new Error(`help does not mention ${flag}`);
     }
   });
@@ -153,6 +153,21 @@ try {
     equal(result.sessions[0].project.name, 'smoke-project', 'project name');
     equal(result.sessions[0].project.gitBranch, 'main', 'branch');
     equal(result.sessions[0].model, 'claude-sonnet-5', 'model');
+  });
+
+  // With a directory of its own, so a tracker that happens to be running on this
+  // machine is not the one that answers.
+  check('status reads a transcript', () => {
+    const summary = cli(['status', '--offline', '--claude-dir', claudeDir]);
+    for (const row of ['5-hour limit', 'Weekly limit', 'Running', 'Dashboard']) {
+      if (!summary.includes(row)) throw new Error(`status does not mention ${row}`);
+    }
+  });
+
+  check('status on a machine with no Claude data still has something to say', () => {
+    if (!cli(['status', '--offline', '--claude-dir', join(probe, 'nowhere')]).includes('no sessions')) {
+      throw new Error('status did not say there are no sessions');
+    }
   });
 
   check('--json on a machine with no Claude data is empty, not an error', () => {
