@@ -11,12 +11,41 @@ permissions:
   id-token: write
 
 jobs:
+  # Built first, so the package published below can carry this exact zip's checksum.
+  # Signed to run locally, as build.sh does by default: no certificate is involved.
+  app:
+    name: Build the macOS app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The Xcode project is generated, not checked in.
+      - run: brew install xcodegen
+      - run: macos/build.sh
+      # ditto, not zip: it keeps the bundle's symlinks and signature as they are.
+      - run: ditto -c -k --keepParent "macos/build/Claude Code Session Tracker.app" claude-code-session-tracker-macos.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: claude-code-session-tracker-macos.zip
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Publish to npm
+    needs: app
     runs-on: ubuntu-latest
     environment: npm
+    permissions:
+      # Creates the GitHub release the app is attached to.
+      contents: write
+      id-token: write
+    env:
+      # `pnpm build` reads this and writes the zip's checksum into dist/. It is set
+      # for the whole job because `npm publish` rebuilds from clean.
+      MENUBAR_ZIP: app/claude-code-session-tracker-macos.zip
     outputs:
       version: ${{ steps.version.outputs.version }}
+      channel: ${{ steps.version.outputs.channel }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -36,6 +65,23 @@ jobs:
           pkg="$(node -p "require('./package.json').version")"
           test "$tag" = "$pkg" || { echo "tag $tag does not match package.json $pkg"; exit 1; }
           echo "version=$tag" >> "$GITHUB_OUTPUT"
+          # A pre-release such as 0.10.0-rc.1 must not become what `npx` or `brew` hands out.
+          case "$tag" in *-*) echo "channel=next" ;; *) echo "channel=latest" ;; esac >> "$GITHUB_OUTPUT"
+
+      # The app is rebuilt on every run and never comes out byte-identical, so a
+      # re-run would replace the zip a published package already vouches for.
+      - name: This version must not be on npm yet
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          if npm view "$name@${{ steps.version.outputs.version }}" version >/dev/null 2>&1; then
+            echo "::error::$name@${{ steps.version.outputs.version }} is already published. Cut a new version instead of re-running."
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: app
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
@@ -45,13 +91,36 @@ jobs:
       - name: Install the tarball and run it
         run: node scripts/smoke.mjs "$(npm pack --silent)" npm
 
-      - run: npm publish --provenance --access public
+      - name: The tarball carries the checksum of the app beside it
+        run: |
+          want="$(sha256sum "$MENUBAR_ZIP" | cut -d' ' -f1)"
+          got="$(tar -xzOf ./*.tgz package/dist/menubar.json | node -p "JSON.parse(require('node:fs').readFileSync(0, 'utf8')).sha256")"
+          test "$want" = "$got" || { echo "tarball says $got, the zip is $want"; exit 1; }
+
+      # Before npm, so no published version ever points at an app that is not there
+      # to download. A release left behind by a run that failed after this step is
+      # reused: the check above has proved nothing on npm depends on its zip.
+      - name: Attach the app to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHANNEL: ${{ steps.version.outputs.channel }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$MENUBAR_ZIP" --clobber
+          else
+            flags=""
+            [ "$CHANNEL" = latest ] || flags="--prerelease"
+            gh release create "$GITHUB_REF_NAME" "$MENUBAR_ZIP" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag $flags
+          fi
+
+      - run: npm publish --provenance --access public --tag "${{ steps.version.outputs.channel }}"
 
   # Renders the formula against the tarball the job above just published, proves
   # it installs on a real macOS runner, and only then moves the tap forward.
   homebrew:
     name: Homebrew tap
     needs: publish
+    if: needs.publish.outputs.channel == 'latest'
     uses: ./.github/workflows/homebrew.yml
     with:
       version: ${{ needs.publish.outputs.version }}

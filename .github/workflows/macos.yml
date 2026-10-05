@@ -1,18 +1,23 @@
 name: macOS app
 
 # The menu bar app and its widget. No other job compiles the Swift, so this is the
-# one that notices when it stops building. It runs only when the app could have
-# changed: its own sources, or the version it takes from package.json.
+# one that notices when it stops building, and the only one with a Mac to install
+# it on. It runs only when either could have changed: the app's own sources, the
+# command that installs it, or the version it takes from package.json.
 on:
   push:
     branches: [main]
     paths:
       - 'macos/**'
+      - src/menubar.ts
+      - scripts/menubar-check.mjs
       - package.json
       - .github/workflows/macos.yml
   pull_request:
     paths:
       - 'macos/**'
+      - src/menubar.ts
+      - scripts/menubar-check.mjs
       - package.json
       - .github/workflows/macos.yml
   workflow_dispatch:
@@ -26,6 +31,10 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      # Node strips the types itself, so the check below runs the command from src/.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       # The Xcode project is generated, not checked in.
       - run: brew install xcodegen
       # Signed to run locally, as build.sh does by default, so no certificate is needed.
@@ -38,3 +47,9 @@ jobs:
             built="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")"
             test "$built" = "$pkg" || { echo "$plist is $built, package.json is $pkg"; exit 1; }
           done
+      # Packed as the release packs it, then installed by the command a user runs.
+      # This runner built the app, so it is not a Mac that has never seen it: what
+      # this proves is that the zip unpacks into an app that starts and stays up.
+      - run: ditto -c -k --keepParent "macos/build/Claude Code Session Tracker.app" claude-code-session-tracker-macos.zip
+      - name: Install it the way `menubar install` does, and see it run
+        run: node scripts/menubar-check.mjs claude-code-session-tracker-macos.zip

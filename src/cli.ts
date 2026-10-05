@@ -6,6 +6,7 @@ import { autostart } from './autostart.ts';
 import { createConfig, DEFAULT_HOST, DEFAULT_PORT } from './config.ts';
 import { SessionRegistry } from './core/registry.ts';
 import { openBrowser } from './desktop.ts';
+import { menubar } from './menubar.ts';
 import { createServer, listen } from './server.ts';
 import { VERSION } from './version.ts';
 
@@ -20,11 +21,15 @@ const HELP = `
   Usage
     $ npx claude-code-session-tracker [options]
     $ claude-code-session-tracker autostart on|off|status
+    $ claude-code-session-tracker menubar install|uninstall|status
 
   Commands
     autostart on          Start at login and open the page (macOS and Windows)
     autostart off         Stop starting at login
     autostart status      Say whether it starts at login
+    menubar install       Install the macOS menu bar app and widget, or update them
+    menubar uninstall     Remove them
+    menubar status        Say whether they are installed
 
   Options
     -p, --port <number>   Port to listen on, stepping forward if taken (default ${DEFAULT_PORT})
@@ -37,14 +42,17 @@ const HELP = `
     -h, --help            Show this message
     -v, --version         Show the version
 
-  The only network call is Claude Code's own usage endpoint at api.anthropic.com,
-  asked with the token Claude Code is signed in with; --offline turns it off.
+  The tracker's only network call is Claude Code's own usage endpoint at
+  api.anthropic.com, asked with the token Claude Code is signed in with; --offline
+  turns it off. \`menubar install\` is the one command that downloads anything: the
+  app this version was published with, from this project's GitHub releases.
   Never writes to the Claude directory. Binds to loopback unless --host says
   otherwise, and refuses requests not addressed to a loopback host.
 `;
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (argv[0] === 'autostart') return autostart(argv.slice(1));
+  if (argv[0] === 'menubar') return menubar(argv.slice(1));
 
   let values;
   try {

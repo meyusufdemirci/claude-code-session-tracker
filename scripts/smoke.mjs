@@ -108,6 +108,22 @@ try {
     }
   });
 
+  // Only that the command is in the package and runs: installing would need the
+  // release this tarball is on its way to, and the app only exists for macOS.
+  check('menubar status answers on macOS, and says so everywhere else', () => {
+    if (process.platform === 'darwin') {
+      if (!cli(['menubar', 'status']).includes('menu bar app')) throw new Error('status did not mention the menu bar app');
+      return;
+    }
+    try {
+      cli(['menubar', 'status']);
+    } catch (error) {
+      if (String(error.stderr).includes('macOS only')) return;
+      throw error;
+    }
+    throw new Error('status succeeded off macOS');
+  });
+
   // A transcript is the only thing the tool needs to have something to say. This
   // one carries a title, a prompt and a turn with usage — the three record shapes
   // the list endpoint reads.

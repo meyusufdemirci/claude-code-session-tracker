@@ -67,13 +67,14 @@ else — and puts it on one page.
   itemised rather than a single number you cannot act on.
 - **Start at login** on macOS and Windows with `autostart on` — see
   [Start it at login](#start-it-at-login).
-- **A menu bar switch and a widget** on macOS — see
-  [Menu bar and widget](#menu-bar-and-widget-macos).
+- **A menu bar switch and a widget** on macOS, installed with `menubar install` —
+  see [Menu bar and widget](#menu-bar-and-widget-macos).
 - **`--json`** for scripting, and an HTTP API if you would rather build your own.
 - **No dependencies, no install scripts, no writes** to your Claude directory. The
-  one network call is Claude Code's own usage endpoint at `api.anthropic.com`, asked
-  every five minutes with the token Claude Code is signed in with, so the limit
-  cards show the same percentages as `/usage`. `--offline` turns it off.
+  tracker's one network call is Claude Code's own usage endpoint at
+  `api.anthropic.com`, asked every five minutes with the token Claude Code is signed
+  in with, so the limit cards show the same percentages as `/usage`. `--offline`
+  turns it off. Nothing else is downloaded unless you ask for the menu bar app.
 
 Click a row and the panel opens beside it:
 
@@ -139,10 +140,14 @@ from one of those, `on` says so and changes nothing.
 
 ## Menu bar and widget (macOS)
 
-`macos/` holds a small native app that puts the tracker in the menu bar. Its
-switch turns the tracker on and off, and the panel under it shows both limits, when
-they reset, and the sessions that are running. A widget for the desktop and
-Notification Center shows the same two limits as rings.
+A small native app puts the tracker in the menu bar. Its switch turns the tracker
+on and off, and the panel under it shows both limits, when they reset, and the
+sessions that are running. A widget for the desktop and Notification Center shows
+the same two limits as rings.
+
+```sh
+npx claude-code-session-tracker menubar install
+```
 
 <p>
   <picture>
@@ -156,11 +161,26 @@ Notification Center shows the same two limits as rings.
   <img width="602" alt="The widget in its small and medium sizes: rings for the five-hour and weekly limits, and in the medium size the running sessions, when each limit resets and a Stop link" src="docs/widget-light.png" />
 </picture>
 
-```sh
-brew install xcodegen          # once; Xcode itself is needed too
-macos/build.sh install         # builds it, copies it to /Applications and opens it
-```
+`menubar install` downloads the app, puts it in `/Applications` — or in
+`~/Applications` where that is not yours to write to — and opens it. It needs
+macOS 14 or later. Run it again after updating the tracker to bring the app to the
+same version; `menubar status` says when the two differ, and `menubar uninstall`
+removes it.
 
+- **What it downloads** is the app built by the same release as the copy of the
+  tracker you ran, from that version's
+  [GitHub release](https://github.com/meyusufdemirci/claude-code-session-tracker/releases)
+  and no other. The package carries that zip's SHA-256, and anything that does not
+  match is refused before it is unpacked.
+- **It is not signed with an Apple Developer ID**, only to run locally. macOS asks
+  about an unsigned app when a browser has marked it as downloaded, and this is
+  fetched by the command you ran, so it opens without a prompt. macOS may ask about
+  the login item or the widget again after an update, since each build is signed
+  afresh. To run only what you compiled, build it yourself — see
+  [Development](#development).
+- **The tracker still has to be installed**, since the app runs it rather than
+  containing it. A copy fetched by `npx` is gone when its cache is cleared, so
+  after an `npx` install the panel offers **Install and start**, described below.
 - **On** starts `claude-code-session-tracker --no-open`, found through your login
   shell's `PATH`, and its output goes to the same log as `autostart`. Where
   `autostart on` has been run, it starts that copy instead, so the tracker that
@@ -179,15 +199,6 @@ macos/build.sh install         # builds it, copies it to /Applications and opens
   process from its sandbox, so clicking it while the tracker is off asks the app to
   start it; clicking it while it runs opens the page.
 
-To run a source checkout instead of the installed tracker:
-
-```sh
-defaults write com.meyusufdemirci.claude-code-session-tracker.app trackerCommand "node $PWD/src/cli.ts"
-```
-
-It is signed to run locally. Set `DEVELOPMENT_TEAM` before `build.sh` to sign it
-with your own team.
-
 ## Options
 
 | Command | Description |
@@ -195,6 +206,9 @@ with your own team.
 | `autostart on` | Start at login and open the page, and start it now (macOS and Windows) |
 | `autostart off` | Stop starting at login, and stop the copy it started |
 | `autostart status` | Say whether it starts at login |
+| `menubar install` | Download the macOS menu bar app and widget for this version, install and open them; run again to update |
+| `menubar uninstall` | Quit the app and remove it |
+| `menubar status` | Say whether the app is installed, and whether it is the tracker's version |
 
 | Flag | Description |
 | --- | --- |
@@ -525,7 +539,9 @@ and rejects requests that are not addressed to a loopback host. Its one outbound
 call is the usage endpoint Claude Code's own `/usage` reads, at
 `api.anthropic.com`, sent only Claude Code's own token and at most every five
 minutes; `--offline` turns it off and the tool then makes no network calls at all.
-There is no telemetry and no update check. The history page's export is written in
+There is no telemetry and no update check. The one other download is the one you
+ask for by name: `menubar install` fetches the macOS app from this project's GitHub
+releases, once, and checks it against the checksum the package was published with. The history page's export is written in
 the browser and saved to your disk, and **Share** only opens X's or LinkedIn's own
 compose page when you click it — the image goes by your clipboard, never by us.
 
@@ -610,9 +626,49 @@ Everything that parses a transcript lives in `src/sources/claude-code/`. The
 `Source` interface in `src/sources/source.ts` is the seam a second tool
 (Codex, Cursor) would plug into; `src/core/` knows nothing about Claude Code.
 
+The menu bar app lives in `macos/` and is built with Xcode and
+[XcodeGen](https://github.com/yonaskolb/XcodeGen); the Xcode project is generated,
+not checked in.
+
+```sh
+brew install xcodegen          # once; Xcode itself is needed too
+macos/build.sh                 # -> macos/build/Claude Code Session Tracker.app
+macos/build.sh install         # builds it, copies it to /Applications and opens it
+```
+
+It takes its version from `package.json` and is signed to run locally; set
+`DEVELOPMENT_TEAM` before `build.sh` to sign it with your own team. To have it run
+a source checkout instead of the installed tracker:
+
+```sh
+defaults write com.meyusufdemirci.claude-code-session-tracker.app trackerCommand "node $PWD/src/cli.ts"
+```
+
+`menubar install` has two kinds of test. `test/menubar.test.ts` stands in for
+`ditto`, `open` and the rest, so it runs on any machine and proves the order
+things happen in. `scripts/menubar-check.mjs` is the other half, for a Mac: it
+installs a zip you built with the real programs and checks the app starts, stays
+up, and is replaced and removed cleanly. CI runs it on a macOS runner whenever the
+app or the command changes.
+
+```sh
+ditto -c -k --keepParent "macos/build/Claude Code Session Tracker.app" app.zip
+node scripts/menubar-check.mjs app.zip /tmp/Applications   # omit the folder to use /Applications
+```
+
 Releasing is a tag: `npm version <patch|minor|major>` then `git push --follow-tags`.
-The release workflow re-runs the checks, publishes with npm provenance, and then
-moves the Homebrew tap forward.
+The release workflow builds the menu bar app first, writes its zip's checksum into
+the package as `dist/menubar.json`, re-runs the checks, attaches the zip to a GitHub
+release for the tag, publishes with npm provenance, and then moves the Homebrew tap
+forward. The app goes up before npm does, so no published version ever points at an
+app that is not there to download.
+
+Two things follow from the checksum. A version that reached npm cannot be
+re-released: the app never builds byte-identical twice, so a second run would
+replace the zip that the published package vouches for, and the workflow stops
+rather than do that. And a pre-release tag such as `v0.10.0-rc.1` is the way to try
+a release end to end — it publishes to npm under `next` instead of `latest`, is
+marked as a pre-release on GitHub, and leaves the Homebrew tap alone.
 
 `pnpm formula` prints the Homebrew formula for a published version, rendered from
 the tarball on npm — Homebrew wants a `sha256` of the exact file it will download
