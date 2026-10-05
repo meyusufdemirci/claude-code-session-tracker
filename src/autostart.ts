@@ -91,7 +91,11 @@ export function macLogPath(home: string = homedir()): string {
  * Port and process lists name a running program by its file, too, so node is run
  * from a hard link named after the project, kept next to the script. The link is
  * made again at every login, so it follows a Node upgrade, and plain node runs
- * when it cannot be made (node on another volume).
+ * when it cannot be made (node on another volume) or cannot start from there.
+ * Homebrew's node is the case for the second: it loads `libnode` from `../lib`
+ * beside its own file, so a link anywhere else dies in dyld before running a line.
+ * Trying the link once does not tell: the first run of a new link can still find
+ * the library through the original's path, and the next one, at login, does not.
  *
  * A copy in a folder macOS guards (Desktop, Documents, Downloads, iCloud Drive, or
  * another volume) skips the link: access there is granted per program, and while
@@ -118,7 +122,9 @@ export function buildLauncherScript(
   const node = runnable ? `$(command -v node) || node=${shellQuote(launcher.node)}` : shellQuote(launcher.node);
   return `${header}node=${node}
 link="$(dirname "$0")/claude-code-session-tracker"
-ln -fL "$node" "$link" 2>/dev/null || rm -f "$link"
+real=$(realpath "$node" 2>/dev/null) || real=$node
+if ls "\${real%/*}"/../lib/libnode.*.dylib >/dev/null 2>&1; then rm -f "$link"
+else ln -fL "$node" "$link" 2>/dev/null || rm -f "$link"; fi
 [ -x "$link" ] && exec "$link" ${cli}
 exec "$node" ${cli}
 `;

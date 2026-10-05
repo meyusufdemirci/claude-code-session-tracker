@@ -1,7 +1,9 @@
 import { deepStrictEqual, match, ok, strictEqual } from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { chmodSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it } from 'node:test';
+import { describe, it, type TestContext } from 'node:test';
 import {
   buildLauncherScript,
   buildPlist,
@@ -15,6 +17,7 @@ import {
   windowsLogPath,
   windowsPidPath,
 } from '../src/autostart.ts';
+import { makeFile, tempDir } from './helpers/temp.ts';
 
 describe('isOneOffCache', () => {
   it('recognises what npx, pnpm dlx, yarn dlx and bunx unpack', () => {
@@ -124,6 +127,41 @@ describe('the macOS login item', () => {
 
   it('lives in the user LaunchAgents folder', () => {
     strictEqual(plistPath('/Users/a'), `/Users/a/Library/LaunchAgents/${LABEL}.plist`);
+  });
+});
+
+/**
+ * The launcher run for real, by `sh`, against a stand-in for node: a script that
+ * prints the name it was started as, so the output says whether the link ran.
+ * Homebrew's layout is `bin/node` linked to a Cellar `bin/node` with `lib/libnode`
+ * beside it; a node in one file has nothing there.
+ */
+describe('the macOS launcher, run', { skip: process.platform === 'win32' }, () => {
+  async function run(t: TestContext, withLibnode: boolean) {
+    const dir = await tempDir(t);
+    const real = await makeFile(dir, 'Cellar/node/1.0.0/bin/node', '#!/bin/sh\necho "$0 $1"\n');
+    chmodSync(real, 0o755);
+    if (withLibnode) await makeFile(dir, 'Cellar/node/1.0.0/lib/libnode.147.dylib');
+    const node = join(dir, 'bin', 'node');
+    await makeFile(dir, 'bin/.keep');
+    symlinkSync(real, node);
+
+    const script = await makeFile(dir, 'Application Support/launcher', buildLauncherScript({ node, cli: '/cli.js' }, false, true));
+    const link = join(dir, 'Application Support', 'claude-code-session-tracker');
+    const output = execFileSync('sh', [script], { encoding: 'utf8' }).trim();
+    return { output, link, node };
+  }
+
+  it('runs a node with libnode beside it directly, without a link', async (t) => {
+    const { output, link, node } = await run(t, true);
+    strictEqual(output, `${node} /cli.js`);
+    strictEqual(existsSync(link), false);
+  });
+
+  it('runs a node in one file from the link named after the tracker', async (t) => {
+    const { output, link } = await run(t, false);
+    strictEqual(output, `${link} /cli.js`);
+    ok(existsSync(link));
   });
 });
 
