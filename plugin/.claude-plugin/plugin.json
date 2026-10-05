@@ -1,6 +1,6 @@
 {
   "name": "tracker",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "See your Claude Code usage limits, running sessions and today's tokens without leaving the terminal, and open the local dashboard.",
   "author": {
     "name": "Yusuf Demirci",
