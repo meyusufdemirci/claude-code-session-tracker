@@ -30,6 +30,8 @@
   `PATH` when there is one, otherwise `npx claude-code-session-tracker` at the plugin's own version,
   which downloads the package the first time. Both need a version that has the
   `status` command, 0.11.0 or later.
+- Only the installed copy is pre-approved. Claude Code asks before it runs the
+  `npx` fallback, so install the CLI to skip the question.
 - `/session-tracker:status` starts nothing. A tracker that is already running is asked,
   and when none is the same numbers are read straight from your Claude directory.
 - `/session-tracker:open` reuses a tracker that is already running, whoever started it.

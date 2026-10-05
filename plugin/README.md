@@ -18,6 +18,9 @@ The plugin holds no code of its own. Each command runs the
 [Claude Code Session Tracker](https://github.com/meyusufdemirci/claude-code-session-tracker)
 CLI: the copy on your `PATH` when there is one, otherwise the npm package
 `claude-code-session-tracker` through `npx`, at the same version as the plugin.
+Only the installed copy is pre-approved. Claude Code asks you before it runs the
+`npx` fallback, so install the CLI (`npm install -g claude-code-session-tracker`)
+to skip the question.
 
 - `status` starts nothing. It asks a tracker that is already running, and when
   none is it reads the same numbers from your Claude directory.
