@@ -40,6 +40,8 @@ targets:
       base:
         PRODUCT_NAME: Claude Code Session Tracker
         PRODUCT_MODULE_NAME: SessionTracker
+        # Drawn by icon.swift from the dashboard's favicon.
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: com.meyusufdemirci.claude-code-session-tracker.app
     dependencies:
       - target: SessionTrackerWidget
