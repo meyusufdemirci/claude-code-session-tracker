@@ -4,10 +4,17 @@ description: Show the Claude Code usage limits (5-hour and weekly), the sessions
 allowed-tools: Bash(claude-code-session-tracker status:*)
 ---
 
-This is the Claude Code Session Tracker's summary of this machine, read just now:
+Read the Claude Code Session Tracker's summary of this machine by running this
+with the Bash tool, exactly as written:
 
 ```
-!`claude-code-session-tracker status 2>/dev/null || npx -y claude-code-session-tracker@0.11.0 status`
+claude-code-session-tracker status
+```
+
+Only when that command is not found, run this instead:
+
+```
+npx -y claude-code-session-tracker@0.11.0 status
 ```
 
 Show the user that summary exactly as printed, in a code block, and add nothing

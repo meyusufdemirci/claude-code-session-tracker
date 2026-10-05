@@ -880,19 +880,22 @@ Code, as `/tracker`, rather than going to find a browser tab.
   second copy beside one that `autostart` or the app already runs. A tracker reading
   a different Claude directory is not asked for numbers, only pointed at.
 - **The plugin is two prompts and no code** (`plugin/`). `/session-tracker:status` and
-  `/session-tracker:open` each run the command of the same name inline: the copy on `PATH`
-  first, then `npx …@latest`. Skills rather than commands, which is what Claude Code
+  `/session-tracker:open` each tell Claude to run the command of the same name: the copy on `PATH`
+  first, then `npx` at the plugin's own version. Not inline (`` !`…` ``), and only the
+  installed copy is pre-approved: the plugin directory flags both an inline shell
+  line and any `npx` grant. Skills rather than commands, which is what Claude Code
   now recommends, and `status` may be invoked by Claude itself while `open` may not —
   opening a browser is something the user asks for. Plugin commands are always
-  namespaced, so the plugin is named `tracker` to make `/tracker` the thing to type.
+  namespaced, so the plugin is named `session-tracker`; plain `tracker` was too close to other
+  directory listings.
 - **The repository is its own marketplace** (`.claude-plugin/marketplace.json`,
   `source: ./plugin`). The plugin sits in a subfolder so installing it does not
   bring the source tree along.
 - **The plugin's version follows the package's.** `npm version` runs
   `scripts/plugin-version.mjs` before it commits, `test/plugin.test.ts` fails when
   they differ, and the release stops at a tag whose plugin was left behind.
-- **Release order matters once.** The skills fall back to `npx …@latest`, so the
-  plugin must not be announced before a version with `status` is `latest` on npm.
+- **Release order matters.** The skills fall back to `npx` at the plugin's version,
+  so a plugin version must not be announced before that version is on npm.
 
 Left out, on purpose:
 
