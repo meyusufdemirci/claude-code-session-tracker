@@ -1,4 +1,5 @@
 import {
+  formatProjectPath,
   formatAgo,
   formatClock,
   formatCompactCount,
@@ -381,7 +382,7 @@ const SESSION_CELL = `<td class="session"><span class="session-title"></span><sp
 
 function fillShared(set, session) {
   set('.project-name', session.project.name);
-  set('.project-path', session.project.path, session.project.path);
+  set('.project-path', formatProjectPath(session.project), formatProjectPath(session.project));
   set('.session-title', headline(session), headline(session));
 }
 

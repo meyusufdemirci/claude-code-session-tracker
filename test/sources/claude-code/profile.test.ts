@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { FileCache } from '../../../src/core/cache.ts';
 import type { FileUsage } from '../../../src/sources/claude-code/buckets.ts';
 import { readUsageProfile } from '../../../src/sources/claude-code/profile.ts';
-import { pathToSlug } from '../../../src/sources/claude-code/slug.ts';
+import { pathToSlug, type SlugPath } from '../../../src/sources/claude-code/slug.ts';
 import { claudeHome, sessionId } from '../../helpers/claude-dir.ts';
 import { assistantRecord } from '../../helpers/records.ts';
 
@@ -17,7 +17,7 @@ const at = (clock: string): number => Date.parse(iso(clock));
 
 const NOW = at('20:00');
 const cache = (): FileCache<FileUsage> => new FileCache<FileUsage>();
-const paths = (): Map<string, string> => new Map<string, string>();
+const paths = (): Map<string, SlugPath> => new Map<string, SlugPath>();
 
 /** One billed turn. Everything a profile row knows comes from a pair of these. */
 const turn = (id: string, clock: string, usage: Record<string, number>): string =>

@@ -14,7 +14,7 @@ import {
   type FileRollup,
   type FileUsage,
 } from './buckets.ts';
-import { projectNameFromPath, resolveSlugPath } from './slug.ts';
+import { projectNameFromPath, resolveSlugPath, type SlugPath } from './slug.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -46,7 +46,7 @@ const MAX_SPAN_MS = 90 * DAY_MS;
 export async function readUsageProfile(
   config: TrackerConfig,
   cache: FileCache<FileUsage>,
-  paths: Map<string, string>,
+  paths: Map<string, SlugPath>,
   query: UsageQuery = {},
   now: number = Date.now(),
 ): Promise<UsageProfile> {
@@ -112,7 +112,7 @@ interface SessionFiles {
  */
 async function rankSessions(
   read: readonly BilledFileUsage[],
-  paths: Map<string, string>,
+  paths: Map<string, SlugPath>,
 ): Promise<UsageProfileSession[]> {
   const bySession = new Map<string, SessionFiles>();
   for (const { file, usage } of read) {
@@ -134,7 +134,7 @@ async function rankSessions(
         turns += rollup.turns;
       }
 
-      const path = await projectPath(entry.slug, paths);
+      const { path } = await projectPath(entry.slug, paths);
       return {
         id,
         slug: entry.slug,
@@ -185,7 +185,7 @@ function rankModels(
   return [...byModel.values()].sort((a, b) => billedTokens(b.tokens) - billedTokens(a.tokens));
 }
 
-async function projectPath(slug: string, paths: Map<string, string>): Promise<string> {
+async function projectPath(slug: string, paths: Map<string, SlugPath>): Promise<SlugPath> {
   const known = paths.get(slug);
   if (known !== undefined) return known;
 

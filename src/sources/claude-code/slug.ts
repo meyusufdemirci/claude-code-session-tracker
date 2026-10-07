@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { readdir, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 /** The characters `pathToSlug` flattens into `-`, and therefore cannot tell apart. */
@@ -29,6 +29,11 @@ export function projectNameFromPath(path: string): string {
   return basename(path) || path;
 }
 
+export interface SlugPath {
+  path: string;
+  pathResolved: boolean;
+}
+
 /**
  * Turn a project folder name back into the directory it was made from.
  *
@@ -40,16 +45,16 @@ export function projectNameFromPath(path: string): string {
  *
  * Everything about this is best-effort. When the walk finds nothing (the project
  * has been moved or deleted, or we are on a platform that slugs paths differently)
- * we hand back the naive `-` → `/` reading, which is at least recognisable.
+ * we return a labelled guess so callers can distinguish it from a real location.
  */
-export async function resolveSlugPath(slug: string): Promise<string> {
+export async function resolveSlugPath(slug: string): Promise<SlugPath> {
   const tokens = slug.split('-');
   // A leading empty token is the root `/`. Without one this is not a path we encoded.
   if (tokens[0] === '') {
     const found = await walk('/', tokens.slice(1), { remaining: WALK_BUDGET });
-    if (found) return found;
+    if (found) return { path: found, pathResolved: true };
   }
-  return slugToPathGuess(slug);
+  return { path: slugToPathGuess(slug), pathResolved: false };
 }
 
 /** The unvalidated reading: every `-` was a `/`. Wrong for real dashes, but legible. */
@@ -62,7 +67,13 @@ async function walk(
   tokens: string[],
   budget: { remaining: number },
 ): Promise<string | undefined> {
-  if (tokens.length === 0) return dir;
+  if (tokens.length === 0) {
+    try {
+      return (await stat(dir)).isDirectory() ? dir : undefined;
+    } catch {
+      return undefined;
+    }
+  }
   if (budget.remaining-- <= 0) return undefined;
 
   let entries: string[];

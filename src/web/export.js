@@ -1,3 +1,5 @@
+import { formatProjectPath } from './format.js';
+
 /**
  * The history page's export: one report, written as a PDF or as a spreadsheet.
  *
@@ -124,7 +126,7 @@ export function buildReport(history, labels, group = 'day') {
             end: Math.min(periodLastDay(period.key, group), lastDay),
           }));
 
-    return { name: labels.get(project.slug) ?? project.name, path: project.path, totals, days: rows };
+    return { name: labels.get(project.slug) ?? project.name, path: formatProjectPath(project), totals, days: rows };
   });
 
   return {

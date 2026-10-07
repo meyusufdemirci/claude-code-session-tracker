@@ -225,7 +225,10 @@ async function readSession(candidate: Candidate): Promise<Session | undefined> {
   if (headRecords.length === 0 && tailRecords.length === 0) return undefined;
 
   const facts = readFacts(headRecords, tailRecords);
-  const path = facts.cwd ?? (await resolveSlugPath(candidate.slug));
+  const location = facts.cwd
+    ? { path: facts.cwd }
+    : await resolveSlugPath(candidate.slug);
+  const { path } = location;
   // `mtimeMs` is fractional; every other time we report is whole milliseconds.
   const modifiedAt = Math.round(candidate.mtimeMs);
 
@@ -236,7 +239,7 @@ async function readSession(candidate: Candidate): Promise<Session | undefined> {
     status: 'ended',
     project: {
       name: projectNameFromPath(path),
-      path,
+      ...location,
       slug: facts.cwd ? pathToSlug(facts.cwd) : candidate.slug,
       ...(facts.gitBranch ? { gitBranch: facts.gitBranch } : {}),
     },

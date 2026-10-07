@@ -1,4 +1,5 @@
 import {
+  formatProjectPath,
   formatClock,
   formatCompactCount,
   formatCount,
@@ -653,7 +654,7 @@ function renderProjects(projects, selected) {
     // Text rather than markup, because a project name is a directory name and a
     // directory can be called anything at all.
     row.querySelector('.project-name').textContent = labels.get(project.slug);
-    row.querySelector('.project-path').textContent = project.path;
+    row.querySelector('.project-path').textContent = formatProjectPath(project);
     if (project.slug === selected) row.dataset.selected = 'true';
 
     const pick = row.querySelector('.project-pick');

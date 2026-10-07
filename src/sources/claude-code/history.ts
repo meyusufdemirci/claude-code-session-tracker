@@ -17,7 +17,7 @@ import {
   type ProjectUsage,
   type UsageBucket,
 } from './buckets.ts';
-import { projectNameFromPath, resolveSlugPath } from './slug.ts';
+import { projectNameFromPath, resolveSlugPath, type SlugPath } from './slug.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -48,7 +48,7 @@ const MAX_SPAN_MS = 371 * DAY_MS;
 export async function readUsageHistory(
   config: TrackerConfig,
   cache: FileCache<FileUsage>,
-  paths: Map<string, string>,
+  paths: Map<string, SlugPath>,
   query: UsageQuery = {},
   now: number = Date.now(),
 ): Promise<UsageHistory> {
@@ -106,16 +106,16 @@ function resolveRange(query: UsageQuery, now: number): { since: number; until: n
 /** Every project in the range, heaviest first, with a name to put on screen. */
 async function rankProjects(
   projects: readonly ProjectUsage[],
-  paths: Map<string, string>,
+  paths: Map<string, SlugPath>,
   split?: ReadonlySet<string>,
 ): Promise<UsageHistoryProject[]> {
   const ranked = await Promise.all(
     projects.map(async (project) => {
-      const path = await projectPath(project.slug, paths);
+      const location = await projectPath(project.slug, paths);
       return {
         slug: project.slug,
-        name: projectNameFromPath(path),
-        path,
+        name: projectNameFromPath(location.path),
+        ...location,
         ...totalOf(project.buckets),
         ...(split?.has(project.slug) ? { buckets: project.buckets.map(toWire) } : {}),
       };
@@ -124,7 +124,7 @@ async function rankProjects(
   return ranked.sort(heaviestFirst);
 }
 
-async function projectPath(slug: string, paths: Map<string, string>): Promise<string> {
+async function projectPath(slug: string, paths: Map<string, SlugPath>): Promise<SlugPath> {
   const known = paths.get(slug);
   if (known !== undefined) return known;
 

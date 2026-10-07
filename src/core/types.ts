@@ -4,8 +4,10 @@ export type SessionStatus = 'busy' | 'waiting' | 'idle' | 'ended';
 export interface SessionProject {
   /** Directory basename, e.g. `Timfog-FS`. */
   name: string;
-  /** Absolute working directory. */
+  /** Recorded working directory, filesystem match, or an explicitly marked guess. */
   path: string;
+  /** False when the path is only a guess decoded from the project slug. */
+  pathResolved?: boolean;
   /** On-disk folder name under `~/.claude/projects`. */
   slug: string;
   gitBranch?: string;
@@ -335,8 +337,10 @@ export interface UsageHistoryProject {
   slug: string;
   /** Directory basename, e.g. `Timfog-FS`. */
   name: string;
-  /** Absolute working directory, resolved from the slug — best-effort, like everywhere else. */
+  /** Filesystem match, or a guess decoded from the project slug. */
   path: string;
+  /** False when the filesystem walk could not resolve the project directory. */
+  pathResolved?: boolean;
   tokens: SessionTokenTotals;
   turns: number;
   /**

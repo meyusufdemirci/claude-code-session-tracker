@@ -59,3 +59,10 @@ export function formatDay(at) {
 export function formatStamp(at) {
   return at ? `${new Date(at).toLocaleString()} · ${formatAgo(at)}` : '—';
 }
+
+/** Keep unresolved slug guesses visibly distinct from known project locations. */
+export function formatProjectPath(project) {
+  return project.pathResolved === false
+    ? `Unresolved path (estimate): ${project.path}`
+    : project.path;
+}

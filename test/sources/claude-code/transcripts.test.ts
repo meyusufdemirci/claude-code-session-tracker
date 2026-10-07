@@ -218,6 +218,7 @@ describe('listRecentSessions', () => {
 
     strictEqual(session?.project.path, '/Users/y/Work/my-app');
     strictEqual(session?.project.name, 'my-app');
+    strictEqual(session?.project.pathResolved, undefined);
   });
 
   it('falls back to decoding the slug when no record carries a cwd', async (t) => {
@@ -226,7 +227,9 @@ describe('listRecentSessions', () => {
       record({ type: 'assistant', message: { id: 'msg_1', model: 'claude-opus-5' } }),
     ]);
 
-    strictEqual((await list(home)).sessions[0]?.project.path, '/Users/y/Work/app');
+    const project = (await list(home)).sessions[0]?.project;
+    strictEqual(project?.path, '/Users/y/Work/app');
+    strictEqual(project?.pathResolved, false);
   });
 
   it('falls back to the file mtime when nothing inside carries a timestamp', async (t) => {
