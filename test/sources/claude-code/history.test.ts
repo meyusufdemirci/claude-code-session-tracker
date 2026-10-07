@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { FileCache } from '../../../src/core/cache.ts';
 import type { FileUsage, UsageBucket } from '../../../src/sources/claude-code/buckets.ts';
 import { readUsageHistory } from '../../../src/sources/claude-code/history.ts';
-import { pathToSlug } from '../../../src/sources/claude-code/slug.ts';
+import { pathToSlug, type SlugPath } from '../../../src/sources/claude-code/slug.ts';
 import { claudeHome, sessionId } from '../../helpers/claude-dir.ts';
 import { assistantRecord, rejectionRecord } from '../../helpers/records.ts';
 
@@ -19,7 +19,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const NOW = at('12:00');
 
 const cache = (): FileCache<FileUsage> => new FileCache<FileUsage>();
-const paths = (): Map<string, string> => new Map<string, string>();
+const paths = (): Map<string, SlugPath> => new Map<string, SlugPath>();
 
 /** The whole fixed day, so a test says what it means rather than leaning on defaults. */
 const RANGE = { since: at('00:00'), until: at('23:30') };
@@ -98,6 +98,7 @@ describe('readUsageHistory', () => {
     // slug and the naive reading stands in — legible, and never a throw.
     strictEqual(history.projects[0]?.path, APP);
     strictEqual(history.projects[0]?.name, 'app');
+    strictEqual(history.projects[0]?.pathResolved, false);
   });
 
   it('resolves a project’s directory once, however many times it is asked for', async (t) => {
@@ -108,12 +109,17 @@ describe('readUsageHistory', () => {
 
     const known = paths();
     const shared = cache();
-    await readUsageHistory(home.config, shared, known, RANGE, NOW);
-    known.set(pathToSlug(APP), '/somewhere/else');
+    const first = await readUsageHistory(home.config, shared, known, RANGE, NOW);
+    strictEqual(first.projects[0]?.pathResolved, false);
+    strictEqual(known.get(pathToSlug(APP))?.pathResolved, false);
+    const cached = await readUsageHistory(home.config, shared, known, RANGE, NOW);
+    strictEqual(cached.projects[0]?.pathResolved, false);
+    known.set(pathToSlug(APP), { path: '/somewhere/else', pathResolved: true });
     const second = await readUsageHistory(home.config, shared, known, RANGE, NOW);
 
     // Proof it was read from the map rather than walked again.
     strictEqual(second.projects[0]?.path, '/somewhere/else');
+    strictEqual(second.projects[0]?.pathResolved, true);
     strictEqual(known.size, 1);
   });
 

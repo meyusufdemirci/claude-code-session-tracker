@@ -1,3 +1,4 @@
+import type { SlugPath } from './slug.ts';
 import { access } from 'node:fs/promises';
 import type { TrackerConfig } from '../../config.ts';
 import { FileCache } from '../../core/cache.ts';
@@ -56,7 +57,7 @@ export class ClaudeCodeSource implements SessionSource {
    * filesystem walk and the answer cannot change while the process runs — a project
    * that moves gets a new slug — so it is remembered outright.
    */
-  readonly #projectPaths = new Map<string, string>();
+  readonly #projectPaths = new Map<string, SlugPath>();
 
   /**
    * The usage readout asked of the server, held between polls. Absent when the

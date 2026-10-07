@@ -1,4 +1,5 @@
-import { strictEqual } from 'node:assert/strict';
+import { rename, rm } from 'node:fs/promises';
+import { deepStrictEqual, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   pathToSlug,
@@ -44,13 +45,33 @@ describe('slugToPathGuess', () => {
 });
 
 describe('resolveSlugPath', () => {
+  it('marks moved and deleted directories as unresolved', async (t) => {
+    const dir = await tempDir(t);
+    const real = await makeDir(dir, 'my-project');
+    const slug = pathToSlug(real);
+    await rename(real, `${real}-moved`);
+    deepStrictEqual(await resolveSlugPath(slug), {
+      path: slugToPathGuess(slug), pathResolved: false,
+    });
+    await rm(`${real}-moved`, { recursive: true });
+    deepStrictEqual(await resolveSlugPath(slug), {
+      path: slugToPathGuess(slug), pathResolved: false,
+    });
+  });
+
+  it('does not resolve a regular file as a project directory', async (t) => {
+    const dir = await tempDir(t);
+    const file = await makeFile(dir, 'project');
+    strictEqual((await resolveSlugPath(pathToSlug(file))).pathResolved, false);
+  });
+
   it('lets the filesystem settle what the slug cannot say', async (t) => {
     // `-a-b` could be `a/b`, `a.b`, `a_b`, or a directory called `a-b`. Only the
     // real tree knows which, so the walk asks it rather than guessing.
     const dir = await tempDir(t);
     const real = await makeDir(dir, 'project.name');
 
-    strictEqual(await resolveSlugPath(pathToSlug(real)), real);
+    deepStrictEqual(await resolveSlugPath(pathToSlug(real)), { path: real, pathResolved: true });
   });
 
   it('prefers the longest directory name that fits', async (t) => {
@@ -60,7 +81,7 @@ describe('resolveSlugPath', () => {
     await makeDir(dir, 'Tivi');
     const real = await makeDir(dir, 'Tivi-FE');
 
-    strictEqual(await resolveSlugPath(pathToSlug(real)), real);
+    deepStrictEqual(await resolveSlugPath(pathToSlug(real)), { path: real, pathResolved: true });
   });
 
   it('backtracks out of a branch that leads nowhere', async (t) => {
@@ -70,7 +91,7 @@ describe('resolveSlugPath', () => {
     await makeDir(dir, 'Tivi-FE');
     const real = await makeDir(dir, 'Tivi/FE/src');
 
-    strictEqual(await resolveSlugPath(pathToSlug(real)), real);
+    deepStrictEqual(await resolveSlugPath(pathToSlug(real)), { path: real, pathResolved: true });
   });
 
   it('backs out when the walk steps onto a file', async (t) => {
@@ -81,18 +102,18 @@ describe('resolveSlugPath', () => {
     const slug = pathToSlug(`${dir}/a/b`);
 
     // Nothing on disk can satisfy it, so what comes back is the naive reading.
-    strictEqual(await resolveSlugPath(slug), slugToPathGuess(slug));
+    deepStrictEqual(await resolveSlugPath(slug), { path: slugToPathGuess(slug), pathResolved: false });
   });
 
   it('falls back to the naive reading when nothing on disk matches', async () => {
-    // The project was moved or deleted. A legible wrong answer beats no answer.
-    strictEqual(
+    // The project was moved or deleted. The guess must not be presented as a known location.
+    deepStrictEqual(
       await resolveSlugPath('-nope-not-here-at-all-3f9c'),
-      '/nope/not/here/at/all/3f9c',
+      { path: '/nope/not/here/at/all/3f9c', pathResolved: false },
     );
   });
 
   it('does not walk for a slug that was never a path we encoded', async () => {
-    strictEqual(await resolveSlugPath('relative-looking'), 'relative/looking');
+    deepStrictEqual(await resolveSlugPath('relative-looking'), { path: 'relative/looking', pathResolved: false });
   });
 });
