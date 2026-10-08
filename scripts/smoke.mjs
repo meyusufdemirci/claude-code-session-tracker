@@ -112,7 +112,9 @@ try {
   // release this tarball is on its way to, and the app only exists for macOS.
   check('menubar status answers on macOS, and says so everywhere else', () => {
     if (process.platform === 'darwin') {
-      if (!cli(['menubar', 'status']).includes('menu bar app')) throw new Error('status did not mention the menu bar app');
+      // Either answer is right: the machine running this may have the app installed.
+      const said = cli(['menubar', 'status']);
+      if (!said.includes('menu bar app') && !said.includes('Installed')) throw new Error('status did not mention the menu bar app');
       return;
     }
     try {
