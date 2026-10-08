@@ -1,5 +1,5 @@
-import { rename, rm } from 'node:fs/promises';
 import { deepStrictEqual, strictEqual } from 'node:assert/strict';
+import { rename, rm } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import {
   pathToSlug,

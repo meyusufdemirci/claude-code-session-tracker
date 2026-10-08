@@ -527,7 +527,7 @@ first source that implements it, exactly as `limits()` does. `404` when none can
   have its slug walked back to a path, so it falls back to the naive `-` → `/` reading
   — legible, and wrong. On this machine one of 23 projects is in that state. The page
   should mark a project it could not find on disk rather than presenting the guess as
-  a location.
+  a location. *(Fixed since — see "What is left".)*
 
 ### 7.3 — The page  *(~half a day)*  ✅ **DONE**
 
@@ -615,6 +615,7 @@ model, and a range with nothing in it says so rather than drawing an empty axis.
 - *Still open, from 7.2:* a project whose directory has moved cannot be walked back to
   a path and shows the naive reading — `.../App/Store/Operator/aso/fe`. It needs the
   reader to say whether the walk succeeded, which is a change in `history.ts`.
+  *(Fixed since — see "What is left".)*
 
 ### 7.5 — Range, state, and the trip back  *(~half a day)*  ✅ **DONE**
 
@@ -672,8 +673,8 @@ dark, beside the two already in `docs/`.
 that must not quietly alter the limit cards — and 7.4 carries the most work.
 
 **All six phases are done.** The estimate held; 7.3 absorbed the two tables 7.4 had
-been holding, because a page shell with nothing in it cannot be reviewed. What is
-left is the one thing the reader cannot currently say — see below.
+been holding, because a page shell with nothing in it cannot be reviewed. What was
+left is below.
 
 ### Risks
 
@@ -686,12 +687,13 @@ left is the one thing the reader cannot currently say — see below.
 
 ### What is left
 
-- **A moved project reads as a wrong path.** `resolveSlugPath` walks the filesystem to
-  settle an ambiguous slug, and a directory that no longer exists cannot be walked —
-  so the row shows the naive `-` → `/` reading. Four of the thirty-two projects on the
-  development machine are in that state. The fix is for the reader to say whether the
-  walk succeeded and for the page to mark the ones it could not find, rather than
-  presenting a guess as a location.
+- ~~**A moved project reads as a wrong path.**~~ ✅ **Fixed.** `resolveSlugPath` now
+  returns `{ path, pathResolved }`, the flag rides on `SessionProject` and
+  `UsageHistoryProject`, and `formatProjectPath` prefixes a guess with
+  `Unresolved path (estimate):` everywhere a path is shown — Recent, the history rows,
+  the export dialog, the PDF and the spreadsheet. A recorded `cwd` still wins, and the
+  walk now refuses to end on a regular file. A guess is cached like a found path, so
+  a directory restored to its old place stays marked until the tracker restarts.
 - **The day arithmetic exists twice**, once in `app.js` and once in `history.js`. It
   wants the same treatment `format.js` gave the formatters; it did not get it in 7.5
   only because `app.js` was being edited elsewhere at the time.

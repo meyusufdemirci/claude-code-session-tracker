@@ -995,7 +995,7 @@ function describeExport() {
 
   setText(
     'export-projects',
-    slug ? `${labels.get(slug)} — ${chosen[0]?.path ?? ''}` : `All ${chosen.length} projects`,
+    slug ? `${labels.get(slug)} — ${chosen[0] ? formatProjectPath(chosen[0]) : ''}` : `All ${chosen.length} projects`,
   );
   const totals = sumOf(chosen);
   setText(

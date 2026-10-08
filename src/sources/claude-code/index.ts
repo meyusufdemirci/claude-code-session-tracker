@@ -1,4 +1,3 @@
-import type { SlugPath } from './slug.ts';
 import { access } from 'node:fs/promises';
 import type { TrackerConfig } from '../../config.ts';
 import { FileCache } from '../../core/cache.ts';
@@ -16,6 +15,7 @@ import type { FileUsage } from './buckets.ts';
 import { readUsageLimits } from './limits.ts';
 import { readUsageProfile } from './profile.ts';
 import { ServerUsage } from './server-usage.ts';
+import type { SlugPath } from './slug.ts';
 import { listLiveSessions } from './live.ts';
 import { listRecentSessions } from './transcripts.ts';
 
@@ -54,8 +54,10 @@ export class ClaudeCodeSource implements SessionSource {
    * Project slug to the directory it was made from.
    *
    * Not a `FileCache`: there is no file to stamp it against. Decoding a slug is a
-   * filesystem walk and the answer cannot change while the process runs — a project
-   * that moves gets a new slug — so it is remembered outright.
+   * filesystem walk and a found directory cannot change while the process runs — a
+   * project that moves gets a new slug — so it is remembered outright. An unresolved
+   * guess is remembered too: a directory restored to its old place stays marked
+   * until the tracker restarts.
    */
   readonly #projectPaths = new Map<string, SlugPath>();
 
