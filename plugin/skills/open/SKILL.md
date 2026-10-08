@@ -15,7 +15,7 @@ claude-code-session-tracker open
 Only when that command is not found, run this instead:
 
 ```
-npx -y claude-code-session-tracker@0.11.0 open
+npx -y claude-code-session-tracker@0.11.1 open
 ```
 
 Tell the user in one line what happened, with the address when there is one.
