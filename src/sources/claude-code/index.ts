@@ -67,6 +67,13 @@ export class ClaudeCodeSource implements SessionSource {
    */
   readonly #serverUsage: ServerUsage | undefined;
 
+  /**
+   * The limits sweep in progress, if one is. A cold sweep reads every transcript in
+   * four weeks and can outlast the page's poll, so a request that arrives meanwhile
+   * waits for that answer instead of starting a second read on top of it.
+   */
+  #limitsInFlight: Promise<UsageLimits> | undefined;
+
   constructor(config: TrackerConfig) {
     this.#config = config;
     this.#serverUsage = config.offline ? undefined : new ServerUsage(config);
@@ -94,6 +101,15 @@ export class ClaudeCodeSource implements SessionSource {
   }
 
   async limits(): Promise<UsageLimits> {
+    if (this.#limitsInFlight) return this.#limitsInFlight;
+
+    this.#limitsInFlight = this.#readLimits().finally(() => {
+      this.#limitsInFlight = undefined;
+    });
+    return this.#limitsInFlight;
+  }
+
+  async #readLimits(): Promise<UsageLimits> {
     const live = await this.#serverUsage?.read();
     return readUsageLimits(this.#config, this.#buckets, Date.now(), live);
   }
