@@ -55,4 +55,18 @@ describe('ClaudeCodeSource', () => {
 
     ok(first.sessions[0] === second.sessions[0], 'the very same object, not a re-read');
   });
+
+  it('shares one limits sweep between requests that arrive while it runs', async (t) => {
+    // A cold sweep over a busy machine can outlast the page's poll interval. Without
+    // this, every poll would start another full read on top of the ones in progress.
+    const home = await claudeHome(t);
+    await home.transcript(CWD, sessionId(1), [userRecord('hello')]);
+    const source = new ClaudeCodeSource(createConfig({ claudeDir: home.config.claudeDir, offline: true }));
+
+    const [first, second] = await Promise.all([source.limits(), source.limits()]);
+    const later = await source.limits();
+
+    ok(first === second, 'the overlapping request joined the sweep in flight');
+    ok(later !== first, 'a request after it finished reads afresh');
+  });
 });
