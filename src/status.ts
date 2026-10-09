@@ -159,7 +159,8 @@ function limitText(limit: UsageLimit, now: number): string {
   if (share === undefined) return 'no reading yet';
 
   // Without Claude Code's own figure the ceiling is unknown, so the number is a comparison and says so.
-  const parts = [typeof limit.reported?.percent === 'number' ? `${formatShare(share)} used` : `${formatShare(share)} of the heaviest window on record`];
+  const scope = limit.reported?.scope ? ` (${limit.reported.scope} only)` : '';
+  const parts = [typeof limit.reported?.percent === 'number' ? `${formatShare(share)} used${scope}` : `${formatShare(share)} of the heaviest window on record`];
   const resetsAt = limit.reported?.resetsAt ?? limit.current?.resetsAt;
   if (resetsAt !== undefined && resetsAt > now) parts.push(`resets in ${formatSpan(resetsAt - now)}`);
   return parts.join(', ');

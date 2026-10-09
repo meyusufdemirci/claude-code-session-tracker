@@ -38,6 +38,8 @@ struct UsageWindow: Decodable, Hashable {
 struct ReportedReading: Decodable, Hashable {
     let percent: Double?
     let resetsAt: Double?
+    /// The one model this bar bills, when the plan has no all-models week.
+    let scope: String?
 }
 
 struct UsageLimit: Decodable, Hashable {

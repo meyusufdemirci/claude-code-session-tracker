@@ -875,6 +875,8 @@ function limitCeiling(limit, current) {
   if (limit.reported) {
     // A reading of 0% has spent nothing measurable to calibrate against, and the
     // heaviest window is not the scale the bar is drawn on, so there is no ceiling.
+    // Nor is there one for a single model's week: the tokens are every model's.
+    if (limit.reported.scope) return undefined;
     const percent = limit.reported.percent;
     return percent > 0 && used > 0 ? used / (percent / 100) : undefined;
   }
@@ -952,6 +954,10 @@ function limitSource(limit, share) {
   // Never a stale one: a reading too old to be about the window in progress, or one
   // the account file left undated, is dropped before it reaches the page.
   const reported = limit.reported;
+  if (reported?.scope) {
+    const who = reported.source === 'server' ? "Anthropic's reading" : "Claude Code's own reading";
+    return `${reported.scope} only — no all-models week on this plan. ${who}, ${formatAgo(reported.fetchedAt)}.`;
+  }
   if (reported) {
     const who = reported.source === 'server' ? "Anthropic's reading" : "Claude Code's own reading";
     return `${scope}${who} of this ${span}, ${formatAgo(reported.fetchedAt)}.`;

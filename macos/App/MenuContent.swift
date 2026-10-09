@@ -179,7 +179,7 @@ struct LimitRow: View {
             ProgressView(value: min(limit.share ?? 0, 1))
                 .tint(LimitColor.of(limit.share))
             HStack {
-                Text(limit.isReported ? "Anthropic's reading" : "vs. your heaviest window")
+                Text(limit.reported?.scope.map { "\($0) only" } ?? (limit.isReported ? "Anthropic's reading" : "vs. your heaviest window"))
                 Spacer()
                 if let reset = limit.resetsAt { Text("resets \(Formatting.reset(reset))") }
             }

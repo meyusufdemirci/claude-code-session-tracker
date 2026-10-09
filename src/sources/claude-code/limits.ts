@@ -152,6 +152,7 @@ function attachReported(
       fetchedAt,
       source: usage.source,
       ...(reported.resetsAt !== undefined ? { resetsAt: reported.resetsAt } : {}),
+      ...(reported.scope !== undefined ? { scope: reported.scope } : {}),
     },
   };
 }

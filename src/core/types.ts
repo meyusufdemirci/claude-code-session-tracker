@@ -245,6 +245,8 @@ export interface ReportedLimitReading {
   source: 'claude-code' | 'server';
   /** The reset Claude Code named for this window, when it named one. */
   resetsAt?: number;
+  /** The one model this bar bills, when the readout had no all-models week to give. */
+  scope?: string;
 }
 
 /**

@@ -22,6 +22,13 @@ export interface ReportedLimit {
   percent: number;
   /** When the window it describes empties, when the readout named one. */
   resetsAt?: number;
+  /**
+   * The one model this limit bills, when it is not every model.
+   *
+   * Set only for a weekly bar taken from a model's own clock because the readout had
+   * no all-models one — so the page can say whose week it is drawing.
+   */
+  scope?: string;
 }
 
 /**
@@ -88,6 +95,11 @@ export async function readReportedUsage(path: string): Promise<ReportedUsage | u
  *
  * The account file caches exactly what the server's usage endpoint returns, so the
  * same parser reads either — and `seven_day` is the all-models bar in both.
+ *
+ * Newer readouts leave `seven_day` null and list the bars under `limits` instead,
+ * and on some plans there is no all-models week at all, only a model's own. That one
+ * is taken over measuring the week against history: a yardstick has no ceiling, so
+ * any week heavier than the heaviest on record reads past 100% of a limit nobody set.
  */
 export function parseUtilization(
   utilization: Record<string, unknown>,
@@ -98,8 +110,37 @@ export function parseUtilization(
     fetchedAt,
     source,
     ...spread('session', reading(utilization['five_hour'])),
-    ...spread('weekly', reading(utilization['seven_day'])),
+    ...spread('weekly', reading(utilization['seven_day']) ?? weeklyFromLimits(utilization['limits'])),
   };
+}
+
+/**
+ * The weekly bar out of the readout's `limits` list: the all-models one when it is
+ * there, else the first bar scoped to a single model, named after that model.
+ */
+function weeklyFromLimits(value: unknown): ReportedLimit | undefined {
+  if (!Array.isArray(value)) return undefined;
+
+  const weekly = value.map(obj).filter((entry) => entry?.['group'] === 'weekly');
+  const everyModel = weekly.find((entry) => entry?.['scope'] == null);
+  const entry = everyModel ?? weekly.find((candidate) => modelName(candidate) !== undefined);
+  if (!entry) return undefined;
+
+  const percent = entry['percent'];
+  if (typeof percent !== 'number' || !Number.isFinite(percent)) return undefined;
+
+  const at = parseReset(entry['resets_at']);
+  const scope = entry === everyModel ? undefined : modelName(entry);
+  return {
+    percent,
+    ...(at !== undefined ? { resetsAt: at } : {}),
+    ...(scope !== undefined ? { scope } : {}),
+  };
+}
+
+function modelName(entry: Record<string, unknown> | undefined): string | undefined {
+  const name = obj(obj(entry?.['scope'])?.['model'])?.['display_name'];
+  return typeof name === 'string' && name ? name : undefined;
 }
 
 /** One entry of the readout, kept only when it says something we can use. */
@@ -110,12 +151,14 @@ function reading(value: unknown): ReportedLimit | undefined {
   const percent = entry['utilization'];
   if (typeof percent !== 'number' || !Number.isFinite(percent)) return undefined;
 
-  const raw = entry['resets_at'];
+  const at = parseReset(entry['resets_at']);
+  return { percent, ...(at !== undefined ? { resetsAt: at } : {}) };
+}
+
+/** A reset stamp, settled to the minute; nothing when it is not one. */
+function parseReset(raw: unknown): number | undefined {
   const at = typeof raw === 'string' ? Date.parse(raw) : Number.NaN;
-  return {
-    percent,
-    ...(Number.isFinite(at) ? { resetsAt: Math.round(at / MINUTE_MS) * MINUTE_MS } : {}),
-  };
+  return Number.isFinite(at) ? Math.round(at / MINUTE_MS) * MINUTE_MS : undefined;
 }
 
 function spread<K extends string, V>(key: K, value: V | undefined): Partial<Record<K, V>> {
