@@ -19,7 +19,7 @@ const DEFAULT_MAX_ENTRIES = 2_000;
 
 export class FileCache<T> {
   readonly #entries = new Map<string, { stamp: string; value: T }>();
-  readonly #maxEntries: number;
+  #maxEntries: number;
 
   constructor(maxEntries: number = DEFAULT_MAX_ENTRIES) {
     this.#maxEntries = Math.max(1, maxEntries);
@@ -45,6 +45,19 @@ export class FileCache<T> {
       if (oldest.done) break;
       this.#entries.delete(oldest.value);
     }
+  }
+
+  /**
+   * Make room for `entries` before a sweep that will visit that many files.
+   *
+   * A sweep walks its files in the same order every time, and least-recently-used is
+   * the worst policy for that once the files outnumber the slots: each one is evicted
+   * just before the sweep comes back for it, so nothing ever hits. Growing to the
+   * sweep keeps it warm. It never shrinks, and files that leave every window are
+   * still the least recently used, so they are the ones that go.
+   */
+  reserve(entries: number): void {
+    this.#maxEntries = Math.max(this.#maxEntries, entries);
   }
 
   get size(): number {
