@@ -23,10 +23,12 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const REGISTRY = 'https://registry.npmjs.org';
 
 // A version published seconds ago is not always resolvable on the first try, and
-// the release job runs immediately after `npm publish`. Waiting beats failing a
-// release over CDN propagation.
-const MANIFEST_ATTEMPTS = 12;
-const MANIFEST_RETRY_MS = 10_000;
+// the release job runs immediately after `npm publish`. The manifest and the
+// tarball propagate through the CDN independently, so a manifest that resolves
+// says nothing about the tarball — both get the same patience. Waiting beats
+// failing a release over CDN propagation.
+const ATTEMPTS = 12;
+const RETRY_MS = 10_000;
 
 function flag(name, fallback = undefined) {
   const index = process.argv.indexOf(`--${name}`);
@@ -47,22 +49,27 @@ function className(packageName) {
 const asDesc = (value) => value.trim().replace(/\.$/, '');
 const asHomepage = (value) => value.split('#')[0];
 
-async function manifest(name, version) {
-  const url = `${REGISTRY}/${encodeURIComponent(name)}/${version}`;
+/** GETs `url`, retrying a 404 while the registry's CDN catches up with a fresh publish. */
+async function fetchPublished(url, label) {
   for (let attempt = 1; ; attempt += 1) {
     const response = await fetch(url);
-    if (response.ok) return response.json();
-    if (response.status !== 404 || attempt === MANIFEST_ATTEMPTS) {
-      throw new Error(`${name}@${version} is not on the registry (HTTP ${response.status})`);
+    if (response.ok) return response;
+    if (response.status !== 404 || attempt === ATTEMPTS) {
+      throw new Error(`GET ${url} failed with HTTP ${response.status}`);
     }
-    console.error(`  ${name}@${version} not resolvable yet, retrying (${attempt}/${MANIFEST_ATTEMPTS - 1})`);
-    await sleep(MANIFEST_RETRY_MS);
+    console.error(`  ${label} not resolvable yet, retrying (${attempt}/${ATTEMPTS - 1})`);
+    await sleep(RETRY_MS);
   }
 }
 
+async function manifest(name, version) {
+  const url = `${REGISTRY}/${encodeURIComponent(name)}/${version}`;
+  const response = await fetchPublished(url, `${name}@${version}`);
+  return response.json();
+}
+
 async function sha256(url) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`GET ${url} failed with HTTP ${response.status}`);
+  const response = await fetchPublished(url, url.split('/').pop());
   return createHash('sha256').update(Buffer.from(await response.arrayBuffer())).digest('hex');
 }
 
