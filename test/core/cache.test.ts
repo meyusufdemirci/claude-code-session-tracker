@@ -54,6 +54,26 @@ describe('FileCache', () => {
     strictEqual(cache.get('c', { mtimeMs: 1, size: 1 }), 'c');
   });
 
+  it('grows to hold what a caller says it is about to visit', () => {
+    const cache = new FileCache<string>(2);
+    cache.reserve(3);
+    cache.set('a', { mtimeMs: 1, size: 1 }, 'a');
+    cache.set('b', { mtimeMs: 1, size: 1 }, 'b');
+    cache.set('c', { mtimeMs: 1, size: 1 }, 'c');
+
+    strictEqual(cache.size, 3);
+    strictEqual(cache.get('a', { mtimeMs: 1, size: 1 }), 'a');
+  });
+
+  it('never shrinks when asked to reserve less than it already holds', () => {
+    const cache = new FileCache<string>(2);
+    cache.reserve(1);
+    cache.set('a', { mtimeMs: 1, size: 1 }, 'a');
+    cache.set('b', { mtimeMs: 1, size: 1 }, 'b');
+
+    strictEqual(cache.size, 2);
+  });
+
   it('holds at least one entry however small it is asked to be', () => {
     const cache = new FileCache<string>(0);
     cache.set('a', { mtimeMs: 1, size: 1 }, 'a');

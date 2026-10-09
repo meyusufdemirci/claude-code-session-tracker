@@ -1,9 +1,10 @@
-import { deepStrictEqual, strictEqual } from 'node:assert/strict';
+import { deepStrictEqual, ok, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { FileCache } from '../../../src/core/cache.ts';
 import {
   mergeBuckets,
   readUsageBuckets,
+  readUsageFiles,
   type ProjectUsage,
   type FileUsage,
   type UsageBucket,
@@ -197,6 +198,29 @@ describe('readUsageBuckets', () => {
     const home = await claudeHome(t);
 
     deepStrictEqual(await readUsageBuckets(home.config, cache(), { since: SINCE }), []);
+  });
+});
+
+describe('readUsageFiles', () => {
+  it('stays warm when the window holds more files than the cache was sized for', async (t) => {
+    // A sweep visits the files in the same order every time. With fewer slots than
+    // files, least-recently-used eviction drops each file just before the sweep comes
+    // back to it, so every poll would re-read every transcript in the window.
+    const home = await claudeHome(t);
+    for (const n of [1, 2, 3]) {
+      await home.transcript(APP, sessionId(n), [
+        assistantRecord({ id: `msg_${n}`, timestamp: iso('09:05'), usage: { output: n } }),
+      ]);
+    }
+
+    const small = new FileCache<FileUsage>(2);
+    const cold = await readUsageFiles(home.config, small, { since: SINCE });
+    const warm = await readUsageFiles(home.config, small, { since: SINCE });
+
+    strictEqual(warm.length, 3);
+    for (const [index, read] of warm.entries()) {
+      ok(read.usage === cold[index]?.usage, `${read.file.path} was read again`);
+    }
   });
 });
 

@@ -211,6 +211,7 @@ export async function readUsageFiles(
   const files = (await listBilledFiles(config.projectsDir)).filter(
     (file) => file.mtimeMs >= window.since,
   );
+  cache.reserve(files.length);
   const perFile = await mapLimit(files, MAX_OPEN_FILES, (file) => loadBuckets(file, cache));
   return files.map((file, index) => ({ file, usage: perFile[index] ?? emptyUsage(file) }));
 }
