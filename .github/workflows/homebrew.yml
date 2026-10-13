@@ -56,7 +56,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Tapping $FORMULA@$version"
 
-      # Retries a 404 for a couple of minutes: a version published seconds ago is
+      # Retries a 404 for about eight minutes: a version published seconds ago is
       # not always resolvable yet, and this job runs right behind `npm publish`.
       - name: Render the formula from the published tarball
         run: node scripts/formula.mjs --version "${{ steps.resolve.outputs.version }}" --out "rendered/Formula/$FORMULA.rb"

@@ -25,10 +25,12 @@ const REGISTRY = 'https://registry.npmjs.org';
 // A version published seconds ago is not always resolvable on the first try, and
 // the release job runs immediately after `npm publish`. The manifest and the
 // tarball propagate through the CDN independently, so a manifest that resolves
-// says nothing about the tarball — both get the same patience. Waiting beats
-// failing a release over CDN propagation.
-const ATTEMPTS = 12;
+// says nothing about the tarball — both get the same patience. Propagation has
+// taken longer than two minutes (v0.12.0), so the wait backs off up to a minute
+// for about eight minutes in all. Waiting beats failing a release over CDN propagation.
+const ATTEMPTS = 15;
 const RETRY_MS = 10_000;
+const MAX_RETRY_MS = 60_000;
 
 function flag(name, fallback = undefined) {
   const index = process.argv.indexOf(`--${name}`);
@@ -52,13 +54,15 @@ const asHomepage = (value) => value.split('#')[0];
 /** GETs `url`, retrying a 404 while the registry's CDN catches up with a fresh publish. */
 async function fetchPublished(url, label) {
   for (let attempt = 1; ; attempt += 1) {
-    const response = await fetch(url);
+    // The CDN caches a 404 too; asking it not to keeps a retry from seeing the
+    // same stale miss for the whole wait.
+    const response = await fetch(url, { headers: { 'cache-control': 'no-cache' } });
     if (response.ok) return response;
     if (response.status !== 404 || attempt === ATTEMPTS) {
       throw new Error(`GET ${url} failed with HTTP ${response.status}`);
     }
     console.error(`  ${label} not resolvable yet, retrying (${attempt}/${ATTEMPTS - 1})`);
-    await sleep(RETRY_MS);
+    await sleep(Math.min(RETRY_MS * 2 ** Math.floor((attempt - 1) / 3), MAX_RETRY_MS));
   }
 }
 
