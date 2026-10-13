@@ -8,6 +8,7 @@ import { SessionRegistry } from './core/registry.ts';
 import { openBrowser } from './desktop.ts';
 import { menubar } from './menubar.ts';
 import { open } from './open.ts';
+import { relaunchUnderOwnName } from './process-name.ts';
 import { createServer, listen } from './server.ts';
 import { status } from './status.ts';
 import { VERSION } from './version.ts';
@@ -115,6 +116,10 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     }
   }
 
+  // Before anything is read or printed: on success this process becomes the server
+  // again, started from a file named after the project instead of `node`.
+  if (!values.json && isDirectInvocation()) relaunchUnderOwnName(argv);
+
   const config = createConfig({
     port,
     host: values.host ?? DEFAULT_HOST,
@@ -150,7 +155,8 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
     );
   }
 
-  // Otherwise `ps`, Activity Monitor and Task Manager's details list it as `node`.
+  // Otherwise `ps` and Task Manager's details list it as `node`; the relaunch above
+  // covers lsof and Activity Monitor, which read the file name instead.
   process.title = 'claude-code-session-tracker';
 
   const server = createServer({ config, registry });
