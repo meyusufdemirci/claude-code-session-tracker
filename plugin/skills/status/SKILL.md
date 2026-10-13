@@ -14,7 +14,7 @@ claude-code-session-tracker status
 Only when that command is not found, run this instead:
 
 ```
-npx -y claude-code-session-tracker@0.11.2 status
+npx -y claude-code-session-tracker@0.11.3 status
 ```
 
 Show the user that summary exactly as printed, in a code block, and add nothing
