@@ -22,7 +22,7 @@ const HELP = `
   Lists every Claude Code session on this machine at a local web page.
 
   Usage
-    $ npx claude-code-session-tracker [options]
+    $ npx claude-code-session-tracker@latest [options]
     $ claude-code-session-tracker status|open
     $ claude-code-session-tracker autostart on|off|status
     $ claude-code-session-tracker menubar install|uninstall|status
@@ -45,13 +45,14 @@ const HELP = `
         --json            Print the session list as JSON and exit
     -n, --limit <number>  How many sessions to list (default 50, running ones are always shown)
         --claude-dir <p>  Override the Claude data directory (default $CLAUDE_CONFIG_DIR or ~/.claude)
-        --offline         Never ask Anthropic's server for the usage limits
+        --offline         Never ask Anthropic's server for the limits, or npm for updates
     -h, --help            Show this message
     -v, --version         Show the version
 
-  The tracker's only network call is Claude Code's own usage endpoint at
-  api.anthropic.com, asked with the token Claude Code is signed in with; --offline
-  turns it off. \`menubar install\` is the one command that downloads anything: the
+  The tracker makes two network calls: Claude Code's own usage endpoint at
+  api.anthropic.com, asked with the token Claude Code is signed in with, and the
+  npm registry, asked a few times a day for the newest version. --offline turns
+  both off. \`menubar install\` is the one command that downloads anything: the
   app this version was published with, from this project's GitHub releases.
   With --with-tracker it also runs \`brew install\` or \`npm install -g\` for the tracker.
   Never writes to the Claude directory. Binds to loopback unless --host says

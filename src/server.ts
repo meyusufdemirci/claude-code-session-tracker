@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { TrackerConfig } from './config.ts';
 import { parseSort, SessionRegistry } from './core/registry.ts';
 import { revealInFileManager } from './desktop.ts';
+import { UpdateCheck } from './update.ts';
 import { VERSION } from './version.ts';
 
 /** Static assets sit next to this module in both `src/` and `dist/`. */
@@ -26,13 +27,15 @@ const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]']);
 export interface ServerOptions {
   config: TrackerConfig;
   registry?: SessionRegistry;
+  updates?: UpdateCheck;
 }
 
-export function createServer({ config, registry }: ServerOptions): Server {
+export function createServer({ config, registry, updates }: ServerOptions): Server {
   const sessions = registry ?? new SessionRegistry(config);
+  const update = updates ?? new UpdateCheck({ offline: config.offline });
 
   return createHttpServer((req, res) => {
-    handle(req, res, config, sessions).catch((error: unknown) => {
+    handle(req, res, config, sessions, update).catch((error: unknown) => {
       sendJson(res, 500, { error: error instanceof Error ? error.message : 'Internal error' });
     });
   });
@@ -43,6 +46,7 @@ async function handle(
   res: ServerResponse,
   config: TrackerConfig,
   registry: SessionRegistry,
+  updates: UpdateCheck,
 ): Promise<void> {
   // A local server holding transcript contents is a DNS-rebinding target, so
   // when we are bound to loopback we only answer requests addressed to loopback.
@@ -74,6 +78,11 @@ async function handle(
       claudeDir: config.claudeDir,
       sources: await registry.statuses(),
     });
+    return;
+  }
+
+  if (path === '/api/update') {
+    sendJson(res, 200, await updates.status());
     return;
   }
 

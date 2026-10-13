@@ -5,7 +5,7 @@
 `--json` prints the same payload the page uses, then exits:
 
 ```sh
-npx claude-code-session-tracker --json | jq '.sessions[] | .project.name'
+npx claude-code-session-tracker@latest --json | jq '.sessions[] | .project.name'
 ```
 
 ```jsonc
@@ -50,6 +50,7 @@ can do with `curl`:
 | `GET /api/sessions/:id` | One session with `counts`, `tokens`, `models`, `activeMs`, `awaySummary`, and `notes` |
 | `GET /api/limits` | Both limits, as `session` (five hours) and `weekly` (seven days). Each carries `windowMs`, `clock`, `historyDays`, the `current` window, the `recent` stretch the forecast is drawn from, the server's percentage as `reported` when there is one for the window in progress (its `source` says whether this tool fetched it — `server` — or read Claude Code's cached one — `claude-code` — and on the weekly limit, `scope` names the one model it covers when the plan has no all-models week), the heaviest closed window as `reference`, and `lastLimited` if Claude ever cut one short. 404 when no source can measure them |
 | `GET /api/usage/history?since=&until=&project=&perProject=` | Where the tokens went: a sparse half-hour series, every project in the range with its name and directory, and every model, each ranked by billed tokens. Epoch milliseconds again; `since` defaults to 30 days back, `until` to now, and a span wider than a year and a week (371 days) is narrowed — `range` in the reply is always the one actually read. `project` takes a slug from the same reply and narrows the series and the models to it, never the project list. `perProject=1` adds each covered project's own half-hour series as `buckets` on its entry — what the export uses to split a day by project; left off, the payload carries only the merged series. 404 when no source can measure it |
+| `GET /api/update` | `current` and `latest` (the newest version on npm, once the registry has answered), whether an update is `available`, how this copy was installed as `method` (`brew`, `npm`, `pnpm`, `bun`, `runner` or `unknown`), the `command` that updates it, and the `releaseUrl` for `latest`. `checked` is false under `--offline`, where nothing is asked |
 | `GET /api/health` | `ok`, the version, the Node it runs on, the resolved Claude directory, and per-source status |
 | `POST /api/sessions/:id/reveal` | Shows that transcript in your file manager. Requires a loopback `Origin` |
 

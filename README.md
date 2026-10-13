@@ -14,7 +14,7 @@ project, with live status, titles, and token usage.
 </picture>
 
 ```sh
-npx claude-code-session-tracker
+npx claude-code-session-tracker@latest
 ```
 
 Then open the printed `http://127.0.0.1:3099`.
@@ -72,11 +72,13 @@ Node 20 or newer, and Claude Code having run at least once. macOS, Linux and
 Windows are all covered by CI.
 
 ```sh
-npx      claude-code-session-tracker   # npm
-pnpm dlx claude-code-session-tracker   # pnpm
-yarn dlx claude-code-session-tracker   # yarn
-bunx     claude-code-session-tracker   # bun
+npx      claude-code-session-tracker@latest   # npm
+pnpm dlx claude-code-session-tracker@latest   # pnpm
+yarn dlx claude-code-session-tracker@latest   # yarn
+bunx     claude-code-session-tracker@latest   # bun
 ```
+
+`@latest` matters: without it, a runner may start the copy it cached last time.
 
 Or put it on your `PATH` — Homebrew brings its own Node:
 
@@ -84,6 +86,19 @@ Or put it on your `PATH` — Homebrew brings its own Node:
 brew install meyusufdemirci/tap/claude-code-session-tracker
 npm i -g claude-code-session-tracker   # or pnpm add -g / bun add -g
 ```
+
+### Updating
+
+The page and the menu bar app say when a newer version is out, with the command
+for how you installed it:
+
+```sh
+npx claude-code-session-tracker@latest                            # npx and the other runners
+brew upgrade meyusufdemirci/tap/claude-code-session-tracker       # Homebrew
+npm i -g claude-code-session-tracker@latest                       # npm, or pnpm add -g / bun add -g
+```
+
+Then restart the tracker, and run `menubar install` again if you use the menu bar app.
 
 ## Start it at login
 
@@ -100,7 +115,7 @@ A small native app whose switch turns the tracker on and off, with both limits a
 the running sessions under it, plus a desktop widget showing the limits as rings.
 
 ```sh
-npx claude-code-session-tracker menubar install --with-tracker
+npx claude-code-session-tracker@latest menubar install --with-tracker
 ```
 
 `--with-tracker` installs the tracker itself first; leave it off when it is already
@@ -150,7 +165,7 @@ The same two work in any terminal as `claude-code-session-tracker status` and
 | `--json` | Print the session list as JSON and exit |
 | `-n, --limit <number>` | How many sessions to list (default `50`; running ones are always shown) |
 | `--claude-dir <path>` | Override the Claude data directory (or set `CLAUDE_CONFIG_DIR`) |
-| `--offline` | Never ask Anthropic's server for the usage limits |
+| `--offline` | Never ask Anthropic's server for the usage limits, or npm for a newer version |
 | `-h, --help` | Show usage |
 | `-v, --version` | Show the version |
 
@@ -162,7 +177,9 @@ The tool reads what Claude Code already writes to `~/.claude`, **never writes
 there**, binds to loopback only, and rejects requests not addressed to a loopback
 host. Its one outbound call is the usage endpoint Claude Code's own `/usage` reads,
 at `api.anthropic.com`, with Claude Code's own token and at most every five
-minutes; `--offline` turns it off. No telemetry, no update check.
+minutes. It also asks the npm registry for the newest version a few times a day,
+so the page and the menu bar can say when an update is out. `--offline` turns both
+off. No telemetry.
 [What it reads, and the rest](docs/privacy.md)
 
 ## More

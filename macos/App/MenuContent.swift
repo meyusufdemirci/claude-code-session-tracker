@@ -9,6 +9,11 @@ struct MenuContent: View {
             header
             Divider()
 
+            if let update = controller.snapshot?.update {
+                UpdateNotice(update: update)
+                Divider()
+            }
+
             if let snapshot = controller.snapshot {
                 if let limits = snapshot.limits {
                     LimitRow(title: "Session limit", limit: limits.session)
@@ -148,6 +153,46 @@ struct MenuContent: View {
         case "busy": .green
         case "waiting": .orange
         default: .secondary
+        }
+    }
+}
+
+/// A newer tracker is out: which one, the command that gets it, and what changed.
+private struct UpdateNotice: View {
+    let update: UpdateInfo
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.circle.fill").foregroundStyle(.orange)
+                Text("Version \(update.latest ?? "") is out").bold()
+                Spacer()
+                Text("you have \(update.current)").font(.caption).foregroundStyle(.secondary)
+            }
+            Text(update.command)
+                .font(.caption.monospaced())
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Button(copied ? "Copied" : "Copy command") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(update.command, forType: .string)
+                    copied = true
+                    Task {
+                        try? await Task.sleep(for: .seconds(2))
+                        copied = false
+                    }
+                }
+                if let notes = update.releaseNotes {
+                    Button("What's new") { NSWorkspace.shared.open(notes) }
+                }
+            }
+            .controlSize(.small)
+            Text("Run it in Terminal, turn the tracker off and on, then run `claude-code-session-tracker menubar install` to update this app.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

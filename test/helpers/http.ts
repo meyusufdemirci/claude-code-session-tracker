@@ -4,6 +4,7 @@ import type { TestContext } from 'node:test';
 import { createConfig } from '../../src/config.ts';
 import { SessionRegistry } from '../../src/core/registry.ts';
 import { createServer } from '../../src/server.ts';
+import { UpdateCheck } from '../../src/update.ts';
 import type { FakeSource } from './fake-source.ts';
 
 export interface Response {
@@ -31,9 +32,14 @@ export interface RequestOptions {
  * they are tested through a socket rather than by calling the handler directly —
  * a header the server never sees is a header the test cannot get wrong.
  */
-export async function startServer(t: TestContext, sources: FakeSource[]): Promise<TestServer> {
+export async function startServer(
+  t: TestContext,
+  sources: FakeSource[],
+  // Offline unless a test brings its own, so no test reaches the npm registry.
+  updates: UpdateCheck = new UpdateCheck({ offline: true }),
+): Promise<TestServer> {
   const config = createConfig({ port: 0 });
-  const server = createServer({ config, registry: new SessionRegistry(config, sources) });
+  const server = createServer({ config, registry: new SessionRegistry(config, sources), updates });
   await new Promise<void>((resolve) => server.listen(0, config.host, resolve));
   t.after(() => new Promise((resolve) => server.close(() => resolve(null))));
 

@@ -14,9 +14,9 @@ export interface TrackerConfig {
   host: string;
   port: number;
   /**
-   * Never ask the server for the usage readout. The limit cards then rely on the
-   * readout Claude Code caches, or on the yardstick, and the tool makes no network
-   * calls at all.
+   * Never ask the server for the usage readout, nor npm for a newer version. The
+   * limit cards then rely on the readout Claude Code caches, or on the yardstick,
+   * and the tool makes no network calls at all.
    */
   offline: boolean;
 }

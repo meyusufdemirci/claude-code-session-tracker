@@ -88,6 +88,18 @@ struct SessionList: Decodable {
     let sessions: [SessionSummary]
 }
 
+/// Whether a newer tracker is out, as the tracker asked the npm registry. Trackers before 0.12 have no such endpoint.
+struct UpdateInfo: Decodable, Hashable {
+    let current: String
+    let latest: String?
+    let available: Bool
+    /// The one command that updates this copy, for how it was installed.
+    let command: String
+    let releaseUrl: String?
+
+    var releaseNotes: URL? { releaseUrl.flatMap(URL.init(string:)) }
+}
+
 struct Health: Decodable {
     let ok: Bool
     let version: String
@@ -113,6 +125,8 @@ struct TrackerSnapshot: Hashable {
     let running: [SessionSummary]
     /// The session list came back in a shape this app does not know, so `running` is empty rather than true.
     let sessionsUnreadable: Bool
+    /// Set only when a newer version is out.
+    let update: UpdateInfo?
     let fetchedAt: Date
 
     /// What to say in place of the limits, so a tracker this app cannot read is not mistaken for a quiet one.
@@ -166,6 +180,7 @@ enum TrackerClient {
         let limits: Fetched<UsageLimits> = await get("/api/limits", port: port)
         // Running sessions come back whatever the limit, so ask for as few others as possible.
         let list: Fetched<SessionList> = await get("/api/sessions?limit=1", port: port)
+        let update: Fetched<UpdateInfo> = await get("/api/update", port: port)
         return TrackerSnapshot(
             port: port,
             version: health.version,
@@ -173,6 +188,7 @@ enum TrackerClient {
             limitsGap: limits.gap,
             running: list.value?.sessions.filter { $0.live != nil } ?? [],
             sessionsUnreadable: list.gap == .unreadable,
+            update: update.value.flatMap { $0.available ? $0 : nil },
             fetchedAt: Date()
         )
     }

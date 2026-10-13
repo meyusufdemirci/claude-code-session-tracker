@@ -1083,6 +1083,37 @@ body:has(#notify-sheet:not([hidden])) { padding-bottom: 8rem; }
 
 .banner .hint { color: var(--ink-soft); }
 
+/* A newer version is news, not a failure, so it takes the accent rather than red. */
+.update-banner {
+  align-items: center;
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+.update-command {
+  padding: .1rem .4rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  font: .8rem ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.update-banner button {
+  padding: .1rem .5rem;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: .8rem;
+  cursor: pointer;
+}
+.update-banner button:hover { color: var(--accent); }
+.update-banner a { color: var(--accent); }
+.update-banner .update-dismiss { margin-left: auto; border: 0; background: none; font-size: 1rem; line-height: 1; }
+
 /* The no-data panel is the page when there is nothing to list, so it gets room. */
 .notice { padding: 1.6rem 1.3rem 1.75rem; }
 .notice h2 { margin-bottom: .5rem; }
