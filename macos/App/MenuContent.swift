@@ -157,42 +157,87 @@ struct MenuContent: View {
     }
 }
 
-/// A newer tracker is out: which one, the command that gets it, and what changed.
+/// A newer tracker is out: Update does it all, and the command is there when it cannot.
 private struct UpdateNotice: View {
+    @EnvironmentObject private var controller: TrackerController
     let update: UpdateInfo
     @State private var copied = false
+
+    private var busy: Bool { controller.updating || update.isBusy }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
-                Image(systemName: "arrow.down.circle.fill").foregroundStyle(.orange)
-                Text("Version \(update.latest ?? "") is out").bold()
+                Image(systemName: update.install?.state == "failed" ? "exclamationmark.triangle.fill" : "arrow.down.circle.fill")
+                    .foregroundStyle(.orange)
+                Text(title).bold()
                 Spacer()
-                Text("you have \(update.current)").font(.caption).foregroundStyle(.secondary)
+                if busy { ProgressView().controlSize(.small) }
             }
-            Text(update.command)
-                .font(.caption.monospaced())
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
-                Button(copied ? "Copied" : "Copy command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(update.command, forType: .string)
-                    copied = true
-                    Task {
-                        try? await Task.sleep(for: .seconds(2))
-                        copied = false
-                    }
-                }
-                if let notes = update.releaseNotes {
-                    Button("What's new") { NSWorkspace.shared.open(notes) }
-                }
-            }
-            .controlSize(.small)
-            Text("Run it in Terminal, turn the tracker off and on, then run `claude-code-session-tracker menubar install` to update this app.")
+            Text(detail)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if update.canInstall == true {
+                HStack(spacing: 8) {
+                    Button(busy ? "Updating…" : update.install?.state == "failed" ? "Try again" : "Update") {
+                        Task { await controller.updateTracker() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(busy)
+                    notesButton
+                }
+                .controlSize(.small)
+            }
+
+            if update.canInstall != true || update.install?.state == "failed" {
+                Text(update.command)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button(copied ? "Copied" : "Copy command") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(update.command, forType: .string)
+                        copied = true
+                        Task {
+                            try? await Task.sleep(for: .seconds(2))
+                            copied = false
+                        }
+                    }
+                    if update.canInstall != true { notesButton }
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var notesButton: some View {
+        if let notes = update.notes {
+            Button("What's new") { NSWorkspace.shared.open(notes) }
+        }
+    }
+
+    private var title: String {
+        switch update.install?.state {
+        case "installing": "Updating to \(update.latest ?? "")…"
+        case "restarting": "Restarting as \(update.latest ?? "")…"
+        case "failed": "Could not update to \(update.latest ?? "")"
+        default: controller.updating ? "Updating to \(update.latest ?? "")…" : "Version \(update.latest ?? "") is out"
+        }
+    }
+
+    private var detail: String {
+        switch update.install?.state {
+        case "installing": update.install?.step ?? ""
+        case "restarting": "This app updates too, and opens again by itself."
+        case "failed": "\(update.install?.error ?? "") You can run it yourself:"
+        default:
+            update.canInstall == true
+                ? "You have \(update.current). Update installs it, restarts the tracker and updates this app."
+                : "You have \(update.current). \(update.installBlocked ?? "") Update with:"
         }
     }
 }

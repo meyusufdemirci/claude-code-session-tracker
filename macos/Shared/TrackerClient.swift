@@ -90,14 +90,26 @@ struct SessionList: Decodable {
 
 /// Whether a newer tracker is out, as the tracker asked the npm registry. Trackers before 0.12 have no such endpoint.
 struct UpdateInfo: Decodable, Hashable {
+    struct Install: Decodable, Hashable {
+        /// `idle`, `installing`, `restarting` or `failed`.
+        let state: String
+        let step: String?
+        let error: String?
+    }
+
     let current: String
     let latest: String?
     let available: Bool
     /// The one command that updates this copy, for how it was installed.
     let command: String
-    let releaseUrl: String?
+    let notesUrl: String?
+    /// The tracker can update itself; when false, `installBlocked` says why and `command` is the way.
+    let canInstall: Bool?
+    let installBlocked: String?
+    let install: Install?
 
-    var releaseNotes: URL? { releaseUrl.flatMap(URL.init(string:)) }
+    var notes: URL? { notesUrl.flatMap(URL.init(string:)) }
+    var isBusy: Bool { install?.state == "installing" || install?.state == "restarting" }
 }
 
 struct Health: Decodable {
@@ -188,9 +200,22 @@ enum TrackerClient {
             limitsGap: limits.gap,
             running: list.value?.sessions.filter { $0.live != nil } ?? [],
             sessionsUnreadable: list.gap == .unreadable,
-            update: update.value.flatMap { $0.available ? $0 : nil },
+            update: update.value.flatMap { $0.available || $0.isBusy ? $0 : nil },
             fetchedAt: Date()
         )
+    }
+
+    /// Ask the tracker to update itself and restart as the new version. It answers at once; the snapshot follows it.
+    static func installUpdate(port: Int) async -> String? {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/api/update/install") else { return "Bad port" }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        // The tracker only takes this from its own origin, as it does from its own page.
+        request.setValue("http://127.0.0.1:\(port)", forHTTPHeaderField: "Origin")
+        guard let (data, response) = try? await session.data(for: request) else { return "The tracker did not answer." }
+        if (response as? HTTPURLResponse)?.statusCode == 202 { return nil }
+        struct Failure: Decodable { let error: String }
+        return (try? JSONDecoder().decode(Failure.self, from: data))?.error ?? "The tracker refused the update."
     }
 
     private enum Fetched<T> {

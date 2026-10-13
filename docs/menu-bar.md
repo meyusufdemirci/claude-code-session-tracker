@@ -6,9 +6,9 @@ macOS 14 or later. Run it again after updating the tracker to bring the app to t
 same version; `menubar status` says when the two differ, and `menubar uninstall`
 removes it.
 
-When a newer tracker is out, the panel says so at the top, with the command that
-updates the copy you have and a link to what changed. Run it, turn the tracker off
-and on, then run `menubar install` again for the app.
+When a newer tracker is out, the panel says so at the top. **Update** upgrades the
+tracker, restarts it, and updates this app, which quits and opens again by itself.
+Where the tracker cannot update itself, the panel shows the command instead.
 
 - **What it downloads** is the app built by the same release as the copy of the
   tracker you ran, from that version's

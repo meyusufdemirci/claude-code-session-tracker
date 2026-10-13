@@ -89,8 +89,11 @@ npm i -g claude-code-session-tracker   # or pnpm add -g / bun add -g
 
 ### Updating
 
-The page and the menu bar app say when a newer version is out, with the command
-for how you installed it:
+The page and the menu bar app say when a newer version is out. **Update** does the
+rest: it upgrades with whatever installed the tracker, checks the new version
+starts, restarts as it on the same port, and updates the menu bar app too. Where
+it cannot (a global npm folder that needs `sudo`, a source checkout), the notice
+shows the command instead:
 
 ```sh
 npx claude-code-session-tracker@latest                            # npx and the other runners
@@ -98,7 +101,8 @@ brew upgrade meyusufdemirci/tap/claude-code-session-tracker       # Homebrew
 npm i -g claude-code-session-tracker@latest                       # npm, or pnpm add -g / bun add -g
 ```
 
-Then restart the tracker, and run `menubar install` again if you use the menu bar app.
+By hand, restart the tracker afterwards, and run `menubar install` again if you use
+the menu bar app.
 
 ## Start it at login
 

@@ -4,6 +4,7 @@ import type { TestContext } from 'node:test';
 import { createConfig } from '../../src/config.ts';
 import { SessionRegistry } from '../../src/core/registry.ts';
 import { createServer } from '../../src/server.ts';
+import { SelfUpdate } from '../../src/self-update.ts';
 import { UpdateCheck } from '../../src/update.ts';
 import type { FakeSource } from './fake-source.ts';
 
@@ -37,9 +38,17 @@ export async function startServer(
   sources: FakeSource[],
   // Offline unless a test brings its own, so no test reaches the npm registry.
   updates: UpdateCheck = new UpdateCheck({ offline: true }),
+  // Blocked unless a test brings its own, so no test runs a package manager.
+  installer: SelfUpdate = new SelfUpdate({
+    plan: { run: (args) => ({ file: 'node', args }), blocked: 'Not in tests.' },
+    current: '0.0.0',
+    argv: [],
+    port: () => 0,
+    close: async () => {},
+  }),
 ): Promise<TestServer> {
   const config = createConfig({ port: 0 });
-  const server = createServer({ config, registry: new SessionRegistry(config, sources), updates });
+  const server = createServer({ config, registry: new SessionRegistry(config, sources), updates, installer });
   await new Promise<void>((resolve) => server.listen(0, config.host, resolve));
   t.after(() => new Promise((resolve) => server.close(() => resolve(null))));
 

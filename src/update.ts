@@ -7,7 +7,8 @@ import { VERSION } from './version.ts';
 /** The registry's record of the newest published version, and nothing else. */
 const LATEST_URL = `https://registry.npmjs.org/${PACKAGE}/latest`;
 
-const RELEASE_URL = 'https://github.com/meyusufdemirci/claude-code-session-tracker/releases/tag';
+/** The project's site, where what is new is told. */
+export const SITE_URL = 'https://ccst.nefarius.co';
 
 /**
  * How often the registry is asked, at most.
@@ -33,8 +34,8 @@ export interface UpdateStatus {
   method: InstallMethod;
   /** What to type to get `latest`. */
   command: string;
-  /** What changed, on the release page for `latest`. */
-  releaseUrl?: string;
+  /** Where to read what changed. */
+  notesUrl: string;
   /** False under `--offline`, where nothing is asked and nothing is known. */
   checked: boolean;
 }
@@ -73,6 +74,10 @@ export class UpdateCheck {
     this.#now = options.now ?? Date.now;
   }
 
+  get method(): InstallMethod {
+    return this.#method;
+  }
+
   async status(): Promise<UpdateStatus> {
     if (!this.#offline) {
       if (!this.#inFlight && this.#now() >= this.#nextAt) {
@@ -86,10 +91,11 @@ export class UpdateCheck {
     const latest = this.#latest;
     return {
       current: this.#current,
-      ...(latest ? { latest, releaseUrl: `${RELEASE_URL}/v${latest}` } : {}),
+      ...(latest ? { latest } : {}),
       available: latest !== undefined && compareVersions(latest, this.#current) > 0,
       method: this.#method,
       command: updateCommand(this.#method),
+      notesUrl: SITE_URL,
       checked: !this.#offline,
     };
   }

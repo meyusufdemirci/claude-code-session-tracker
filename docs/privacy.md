@@ -6,7 +6,8 @@ call is the usage endpoint Claude Code's own `/usage` reads, at
 `api.anthropic.com`, sent only Claude Code's own token and at most every five
 minutes. The other is `registry.npmjs.org`, asked a few times a day for the newest
 version's number and nothing else, so the page and the menu bar can say when an
-update is out. `--offline` turns both off and the tool then makes no network calls
+update is out. **Update** runs the package manager that installed the tracker only
+when you click it, from the tracker's own page or the menu bar app. `--offline` turns both off and the tool then makes no network calls
 at all. There is no telemetry. The one other download is the one you
 ask for by name: `menubar install` fetches the macOS app from this project's GitHub
 releases, once, and checks it against the checksum the package was published with. With

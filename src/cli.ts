@@ -160,7 +160,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   // covers lsof and Activity Monitor, which read the file name instead.
   process.title = 'claude-code-session-tracker';
 
-  const server = createServer({ config, registry });
+  const server = createServer({ config, registry, argv });
   const boundPort = await listen(server, config);
   // The page reads its own limit from the query string, so `--limit` carries through.
   const url = `http://${config.host}:${boundPort}${limit === undefined ? '' : `/?limit=${limit}`}`;

@@ -60,10 +60,10 @@ describe('UpdateCheck', () => {
     deepStrictEqual(await check.status(), {
       current: '0.11.3',
       latest: '0.12.0',
-      releaseUrl: 'https://github.com/meyusufdemirci/claude-code-session-tracker/releases/tag/v0.12.0',
       available: true,
       method: 'npm',
       command: 'npm install -g claude-code-session-tracker@latest',
+      notesUrl: 'https://ccst.nefarius.co',
       checked: true,
     });
   });

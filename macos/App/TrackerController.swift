@@ -28,6 +28,8 @@ final class TrackerController: ObservableObject {
     /// Starting found no `claude-code-session-tracker` to run.
     @Published private(set) var notInstalled = false
     @Published private(set) var installing = false
+    /// The Update button was pressed and the tracker is not back as the new version yet.
+    @Published private(set) var updating = false
     @Published private(set) var launchesAtLogin = SMAppService.mainApp.status == .enabled
 
     /// Whether the user last left the tracker on, so the app brings it back next time it starts.
@@ -225,6 +227,32 @@ final class TrackerController: ObservableObject {
         default:
             error = "The install failed. See \(Self.logPath.path)."
         }
+    }
+
+    /**
+     * Update the tracker, then wait for it to come back as the new version.
+     *
+     * The tracker does the work — upgrade, restart, and `menubar install` for this
+     * app, which quits it and opens the new one — so this only asks and watches.
+     */
+    func updateTracker() async {
+        guard let snapshot else { return }
+        error = nil
+        updating = true
+        defer { updating = false }
+
+        if let refused = await TrackerClient.installUpdate(port: snapshot.port) {
+            error = refused
+            return
+        }
+        for _ in 0..<180 {
+            try? await Task.sleep(for: .seconds(1))
+            let next = await TrackerClient.snapshot(preferredPort: snapshot.port)
+            if let next { apply(next) }
+            if let next, next.version != snapshot.version { return }
+            if next?.update?.install?.state == "failed" { return }
+        }
+        error = "The update is taking a while. See \(Self.logPath.path)."
     }
 
     func stop() async {

@@ -15,7 +15,7 @@
   <body>
     <header class="masthead">
       <div class="masthead-title">
-        <p class="eyebrow">Claude Code</p>
+        <p class="eyebrow">Claude Code <span class="eyebrow-version" data-version-current></span></p>
         <h1>Settings</h1>
         <nav class="segmented" aria-label="Views">
           <a href="/">Sessions</a>
@@ -104,6 +104,19 @@
             buried, but nothing runs in the background.</li>
           <li><strong>Kept in this browser.</strong> Nothing leaves the machine.</li>
         </ul>
+      </section>
+
+      <!-- Filled by `update.js`, which already asks the server about versions. -->
+      <section class="panel settings-panel" id="version-panel">
+        <div class="panel-head">
+          <h2>Version</h2>
+        </div>
+        <dl class="facts">
+          <div><dt>Installed</dt><dd data-version-current>—</dd></div>
+          <div><dt>Newest</dt><dd id="version-latest">—</dd></div>
+          <div><dt>Installed with</dt><dd id="version-method">—</dd></div>
+        </dl>
+        <p class="settings-state" id="version-state" data-tone="ok" hidden></p>
       </section>
     </main>
 

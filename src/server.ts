@@ -1,3 +1,4 @@
+import type { AddressInfo } from 'node:net';
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
@@ -6,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import type { TrackerConfig } from './config.ts';
 import { parseSort, SessionRegistry } from './core/registry.ts';
 import { revealInFileManager } from './desktop.ts';
+import { planFor, SelfUpdate } from './self-update.ts';
 import { UpdateCheck } from './update.ts';
 import { VERSION } from './version.ts';
 
@@ -28,17 +30,36 @@ export interface ServerOptions {
   config: TrackerConfig;
   registry?: SessionRegistry;
   updates?: UpdateCheck;
+  installer?: SelfUpdate;
+  /** What the tracker was started with, so the Update button can start the new version the same way. */
+  argv?: string[];
 }
 
-export function createServer({ config, registry, updates }: ServerOptions): Server {
+export function createServer({ config, registry, updates, installer, argv = [] }: ServerOptions): Server {
   const sessions = registry ?? new SessionRegistry(config);
   const update = updates ?? new UpdateCheck({ offline: config.offline });
 
-  return createHttpServer((req, res) => {
-    handle(req, res, config, sessions, update).catch((error: unknown) => {
+  const server = createHttpServer((req, res) => {
+    handle(req, res, config, sessions, update, self).catch((error: unknown) => {
       sendJson(res, 500, { error: error instanceof Error ? error.message : 'Internal error' });
     });
   });
+
+  const self =
+    installer ??
+    new SelfUpdate({
+      plan: planFor(update.method, process.argv[1]),
+      current: VERSION,
+      argv,
+      port: () => (server.address() as AddressInfo).port,
+      close: () =>
+        new Promise((resolveClose) => {
+          server.close(() => resolveClose());
+          server.closeAllConnections?.();
+        }),
+    });
+
+  return server;
 }
 
 async function handle(
@@ -47,6 +68,7 @@ async function handle(
   config: TrackerConfig,
   registry: SessionRegistry,
   updates: UpdateCheck,
+  installer: SelfUpdate,
 ): Promise<void> {
   // A local server holding transcript contents is a DNS-rebinding target, so
   // when we are bound to loopback we only answer requests addressed to loopback.
@@ -58,7 +80,13 @@ async function handle(
   const url = new URL(req.url ?? '/', 'http://localhost');
   const path = url.pathname;
 
-  // Ahead of the read-only gate below, because this is the one route that acts.
+  // Ahead of the read-only gate below, like reveal: the other route that acts.
+  if (path === '/api/update/install') {
+    await install(req, res, updates, installer);
+    return;
+  }
+
+  // Ahead of the read-only gate below, because this route acts.
   const revealMatch = /^\/api\/sessions\/([\w-]+)\/reveal$/.exec(path);
   if (revealMatch?.[1]) {
     await reveal(req, res, registry, revealMatch[1]);
@@ -82,7 +110,7 @@ async function handle(
   }
 
   if (path === '/api/update') {
-    sendJson(res, 200, await updates.status());
+    sendJson(res, 200, { ...(await updates.status()), ...installer.status() });
     return;
   }
 
@@ -239,6 +267,42 @@ async function reveal(
 
   revealInFileManager(detail.transcriptPath);
   sendJson(res, 200, { ok: true, path: detail.transcriptPath });
+}
+
+/**
+ * Update the tracker to the newest version, then restart as it.
+ *
+ * A POST with the same origin check as reveal, for the same reason: it runs a
+ * package manager, so no other website may ask for it. What runs is fixed by how
+ * this copy was installed; nothing in the request reaches a command line.
+ */
+async function install(
+  req: IncomingMessage,
+  res: ServerResponse,
+  updates: UpdateCheck,
+  installer: SelfUpdate,
+): Promise<void> {
+  if (req.method !== 'POST') {
+    res.setHeader('allow', 'POST');
+    sendJson(res, 405, { error: 'Install must be a POST' });
+    return;
+  }
+
+  if (!isSameOrigin(req.headers.origin)) {
+    sendJson(res, 403, { error: 'Cross-origin request refused' });
+    return;
+  }
+
+  const status = await updates.status();
+  if (!status.available || !status.latest) {
+    sendJson(res, 409, { error: 'No newer version to install' });
+    return;
+  }
+  if (!installer.start(status.latest)) {
+    sendJson(res, 409, { error: installer.status().installBlocked ?? 'An update is already running' });
+    return;
+  }
+  sendJson(res, 202, { ok: true, ...installer.status() });
 }
 
 /** Browsers always send `Origin` on a POST, so a missing one is not our page asking. */
