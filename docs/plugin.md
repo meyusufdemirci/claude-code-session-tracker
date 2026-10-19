@@ -11,7 +11,7 @@
 | `/session-tracker:open` | Opens the page in your browser, starting the tracker first if it is not running |
 
 ```
-  Claude Code Session Tracker 0.12.0
+  Claude Code Session Tracker 0.13.0
 
   5-hour limit  12% used, resets in 3h
   Weekly limit  12% used, resets in 4d 9h
