@@ -21,10 +21,11 @@ if (plugin.version !== version) {
   writeFileSync(manifest, `${JSON.stringify(plugin, null, 2)}\n`);
 }
 
-for (const skill of readdirSync(skills)) {
-  const file = new URL(`${skill}/SKILL.md`, skills);
-  const prompt = readFileSync(file, 'utf8');
-  const pinned = prompt.replaceAll(new RegExp(`${name}@[^\\s)]+`, 'g'), `${name}@${version}`);
-  if (pinned !== prompt) writeFileSync(file, pinned);
+// The auto continue hook falls back to `npx` the same way, and is pinned the same way.
+const pinnable = [...readdirSync(skills).map((skill) => new URL(`${skill}/SKILL.md`, skills)), new URL('plugin/hooks/hooks.json', root)];
+for (const file of pinnable) {
+  const text = readFileSync(file, 'utf8');
+  const pinned = text.replaceAll(new RegExp(`${name}@[^\\s)]+`, 'g'), `${name}@${version}`);
+  if (pinned !== text) writeFileSync(file, pinned);
 }
 console.log(`plugin  ${plugin.name} ${version}`);

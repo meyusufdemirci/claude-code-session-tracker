@@ -16,6 +16,7 @@ import {
   setQuietMinutes,
   setWanted,
 } from './notify.js';
+import { formatWhen, PLUGIN_NOTES, readAutoContinue, sessionCount, setAutoContinue } from './auto-continue.js';
 
 /**
  * What the line under the switches says, keyed by what the browser answered.
@@ -133,6 +134,106 @@ document.addEventListener('visibilitychange', () => {
 // opens with them saying what is actually in force.
 fillIntervals();
 render();
+
+/* ----------------------------------------------------------- auto continue */
+
+/** How often the queue is read again while the page is open: sessions stop and wake on their own. */
+const AUTO_INTERVAL_MS = 15000;
+
+const autoSwitch = document.getElementById('auto-continue');
+
+/** What each waiting session is called: its title when it is running, else its folder. */
+async function sessionLabels() {
+  try {
+    const response = await fetch('/api/sessions?limit=1', { headers: { accept: 'application/json' } });
+    const { sessions } = response.ok ? await response.json() : { sessions: [] };
+    return new Map(sessions.map((session) => [session.id, session.title ?? session.name ?? session.project?.name]));
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Draw the panel from what the server says, which is the only place it is true: the
+ * switch, why it would do nothing, who is waiting, and who it woke last.
+ */
+async function renderAutoContinue(status) {
+  const panel = document.getElementById('auto-continue-panel');
+  if (!panel || !autoSwitch) return;
+  panel.hidden = !status;
+  if (!status) return;
+
+  autoSwitch.checked = status.enabled;
+  autoSwitch.setAttribute('aria-checked', String(status.enabled));
+
+  const line = document.getElementById('auto-continue-state');
+  const note = PLUGIN_NOTES[status.plugin];
+  if (line) {
+    line.hidden = !note;
+    line.textContent = note ?? '';
+  }
+
+  const queue = document.getElementById('auto-continue-queue');
+  const list = document.getElementById('auto-continue-list');
+  if (queue && list) {
+    queue.hidden = status.pending.length === 0;
+    const labels = status.pending.length ? await sessionLabels() : new Map();
+    const count = document.getElementById('auto-continue-count');
+    if (count) {
+      count.textContent = status.enabled
+        ? `${sessionCount(status.pending.length)} will continue`
+        : `${sessionCount(status.pending.length)} stopped at the limit · turn the switch on to continue ${status.pending.length === 1 ? 'it' : 'them'}`;
+    }
+    list.replaceChildren(
+      ...status.pending.map((entry) => {
+        const item = document.createElement('li');
+        const name = document.createElement('span');
+        name.className = 'auto-queue-name';
+        name.textContent = labels.get(entry.sessionId) ?? entry.cwd?.split(/[\\/]/).pop() ?? entry.sessionId.slice(0, 8);
+        const when = document.createElement('span');
+        when.className = 'auto-queue-when mono';
+        when.textContent = `${status.enabled ? 'continues' : 'limit resets'} ${formatWhen(status.enabled ? entry.continueAt : entry.resetsAt)}`;
+        item.append(name, when);
+        return item;
+      }),
+    );
+  }
+
+  const last = document.getElementById('auto-continue-last');
+  const latest = status.continued[0];
+  if (last) {
+    last.hidden = !latest;
+    if (latest) {
+      const together = status.continued.filter((entry) => Math.abs(entry.at - latest.at) < 10 * 60 * 1000).length;
+      last.textContent = `Last continued ${formatWhen(latest.at)} · ${sessionCount(together)}`;
+    }
+  }
+}
+
+async function refreshAutoContinue() {
+  await renderAutoContinue(await readAutoContinue());
+}
+
+autoSwitch?.addEventListener('change', async () => {
+  const wanted = autoSwitch.checked;
+  try {
+    await renderAutoContinue(await setAutoContinue(wanted));
+  } catch (error) {
+    // Put the switch back where the server has it, and say why.
+    await refreshAutoContinue();
+    const line = document.getElementById('auto-continue-state');
+    if (line) {
+      line.hidden = false;
+      line.textContent = `Could not turn auto continue ${wanted ? 'on' : 'off'}: ${error.message}`;
+    }
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshAutoContinue();
+});
+refreshAutoContinue();
+setInterval(refreshAutoContinue, AUTO_INTERVAL_MS);
 
 /**
  * The same question again the moment the browser changes its own answer.

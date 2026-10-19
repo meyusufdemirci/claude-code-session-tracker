@@ -40,6 +40,10 @@ Where the tracker cannot update itself, the panel shows the command instead.
   on the next time it opens. Left off, it stays off: the copy `autostart` brings
   up at login is stopped again when the app opens. **Open at login** in the panel
   adds the app to Login Items.
+- **Auto continue paused sessions**, under it, is the [auto continue](auto-continue.md)
+  switch — the same one the Settings page shows. When a limit is full, a note under
+  it says which sessions will continue and when, or offers **Turn on**; waiting
+  sessions show their wake time in the list.
 - The widget reads the tracker on loopback every five minutes. It cannot start a
   process from its sandbox, so clicking it while the tracker is off asks the app to
   start it; clicking it while it runs opens the page.

@@ -54,10 +54,13 @@ can do with `curl`:
 | `POST /api/update/install` | Updates the tracker to `latest` with the package manager that installed it, then restarts as the new version on the same port, and updates the menu bar app when it is installed. Answers 202 at once; `GET /api/update` follows it. Requires a loopback `Origin`; 409 when there is nothing newer, an update is already running, or this copy cannot update itself |
 | `GET /api/health` | `ok`, the version, the Node it runs on, the resolved Claude directory, and per-source status |
 | `POST /api/sessions/:id/reveal` | Shows that transcript in your file manager. Requires a loopback `Origin` |
+| `GET /api/auto-continue` | [Auto continue](auto-continue.md): whether it is `enabled`, the `plugin`'s state (`ready`, `missing`, `outdated` or `disabled`), the sessions `pending` a reset (`sessionId`, `cwd`, `clock` — `five_hour` or `weekly` — `resetsAt`, `continueAt`, `since`), and the latest `continued` ones |
+| `POST /api/auto-continue` | Turns it on or off: `{"enabled": true}`. Answers with the same body as the GET. Requires a loopback `Origin` |
 
-Every route refuses a request whose `Host` is not loopback. `reveal` is the only
-one that acts rather than reports, so it is a POST, it checks `Origin` as well,
-and the path it opens comes from our own lookup — never from the request.
+Every route refuses a request whose `Host` is not loopback. The routes that act
+rather than report — `reveal`, `update/install` and the auto continue switch — are
+POSTs that check `Origin` as well, and `reveal` opens a path from our own lookup,
+never from the request.
 
 ## Programmatic use
 

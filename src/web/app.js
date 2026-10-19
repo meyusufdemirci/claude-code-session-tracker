@@ -9,6 +9,7 @@ import {
   formatStamp,
 } from './format.js';
 import { deferInvite, dismissInvite, isInviteDue, sendAlert } from './notify.js';
+import { PLUGIN_NOTES, readAutoContinue, sessionCount, setAutoContinue, formatWhen as formatContinueAt, whenTheyContinue } from './auto-continue.js';
 
 /** How often we ask the server for the session list. Phase 5 may replace this with SSE. */
 const SESSIONS_INTERVAL_MS = 2000;
@@ -119,6 +120,8 @@ const state = {
   limits: null,
   /** The last set of findings, or null before the first reading. */
   advice: null,
+  /** Auto continue's switch and the sessions waiting on it, or null on a tracker without it. */
+  autoContinue: null,
   /** No source could find its data. The strip and the tables all step aside for the notice. */
   noData: false,
   /** Consecutive failed polls. One is a blip; two is worth interrupting for. */
@@ -199,6 +202,12 @@ async function pollAdvice() {
 }
 
 async function pollLimits() {
+  // Alongside the limits rather than on a clock of its own: what it says is about them.
+  readAutoContinue().then((status) => {
+    state.autoContinue = status;
+    renderLimits();
+    render();
+  });
   try {
     state.limits = await getJson('/api/limits');
   } catch {
@@ -411,7 +420,7 @@ const liveTable = createTable({
     set('.session-sub', session.name ?? session.id.slice(0, 8));
     set('.badge-text', STATUS_LABELS[session.status] ?? session.status);
     row.querySelector('.badge')?.setAttribute('data-status', session.status);
-    set('.waiting-for', session.waitingFor ?? '');
+    set('.waiting-for', continueLine(session) ?? session.waitingFor ?? '');
     set('.model', shortModel(session.model));
     fillTokens(set, session, row);
     set('.uptime', formatUptime(session.startedAt));
@@ -543,6 +552,78 @@ function renderLimitCard(card, limit, key) {
   reportProjection(key, limit, current, forecast);
 
   setField(card, 'note', limitNote(limit, share, current, forecast));
+  renderAutoNote(card, key, share);
+}
+
+/* ---------------------------------------------------------- auto continue */
+
+/** Which refusal clock each card is: the hook names them the way Claude Code does. */
+const AUTO_CLOCKS = { session: 'five_hour', weekly: 'weekly' };
+
+/**
+ * What a running session that stopped on a limit says beside its status: when it
+ * continues, or when the limit resets if auto continue is off.
+ */
+function continueLine(session) {
+  const status = state.autoContinue;
+  const entry = status?.pending.find((pending) => pending.sessionId === session.id);
+  if (!entry) return undefined;
+  return status.enabled && status.plugin === 'ready'
+    ? `at limit · continues ${formatContinueAt(entry.continueAt)}`
+    : `at limit · resets ${formatContinueAt(entry.resetsAt)}`;
+}
+
+/**
+ * The line under a limit's details about auto continue.
+ *
+ * Drawn for a limit that is full or has stopped sessions, and nowhere else: a card
+ * at 40% has no use for it. Off, it offers to turn it on; on, it says when the
+ * stopped sessions pick up; with no plugin to do the waiting, it says that instead,
+ * since turning the switch on would then do nothing.
+ */
+function renderAutoNote(card, key, share) {
+  const note = field(card, 'auto-note');
+  if (!note) return;
+  const status = state.autoContinue;
+  const pending = status?.pending.filter((entry) => entry.clock === AUTO_CLOCKS[key]) ?? [];
+  const full = share !== undefined && share >= 1;
+  note.hidden = !status || (!full && pending.length === 0);
+  if (note.hidden) return;
+
+  const button = field(card, 'auto-on');
+  const link = field(card, 'auto-link');
+  const ready = status.plugin === 'ready';
+  let text;
+  if (!ready) {
+    text = `${pending.length ? `${sessionCount(pending.length)} stopped at the limit, and auto continue can pick them up when it resets. ` : 'Auto continue can pick up the sessions this limit stops once it resets. '}${PLUGIN_NOTES[status.plugin]}`;
+  } else if (status.enabled) {
+    text = pending.length
+      ? `Auto continue is on. ${sessionCount(pending.length)} continue ${whenTheyContinue(pending)}.`
+      : 'Auto continue is on. Sessions that stop on this limit continue once it resets.';
+  } else {
+    text = pending.length
+      ? `${sessionCount(pending.length)} stopped at the limit. Turn on auto continue and they pick up by themselves when it resets, ${whenTheyContinue(pending.map((entry) => ({ continueAt: entry.resetsAt })))}. Otherwise they wait for you to type “continue”.`
+      : 'Sessions this limit stops wait for you to type “continue”. Turn on auto continue and they pick up by themselves once it resets.';
+  }
+  note.dataset.tone = ready && status.enabled ? 'on' : 'off';
+  setField(card, 'auto-text', text);
+  if (button) button.hidden = !ready || status.enabled;
+  if (link) link.textContent = ready && status.enabled ? 'Settings' : 'How it works';
+}
+
+for (const button of document.querySelectorAll('[data-role="auto-on"]')) {
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    try {
+      state.autoContinue = await setAutoContinue(true);
+    } catch {
+      state.autoContinue = await readAutoContinue();
+    } finally {
+      button.disabled = false;
+    }
+    renderLimits();
+    render();
+  });
 }
 
 /**

@@ -31,6 +31,8 @@ else — and puts it on one page.
   pace. [More](docs/limits.md)
 - ✅ **A notification** when either window is on course to run out before it resets.
   Off until you turn it on. [More](docs/limits.md#getting-told)
+- ✅ **Auto continue**: sessions that stopped on a limit pick up by themselves once it
+  resets. Off until you turn it on; needs the plugin. [More](docs/auto-continue.md)
 - ✅ **Active sessions**, checked twice against the OS so a stale file or a recycled
   PID never shows up as running.
 - ✅ **Recent sessions** across every project, with Claude's own title, the prompts,
@@ -149,6 +151,7 @@ installed. Needs macOS 14 or later. [Details](docs/menu-bar.md)
 | `/session-tracker:status` | Prints both limits and when they reset, what today has billed, and the sessions that are running |
 | `/session-tracker:open` | Opens the page in your browser, starting the tracker first if it is not running |
 
+The plugin also carries the hook [auto continue](docs/auto-continue.md) waits with.
 The same two work in any terminal as `claude-code-session-tracker status` and
 `open`. [Details](docs/plugin.md)
 
@@ -189,6 +192,7 @@ off. No telemetry.
 ## More
 
 - [The limits](docs/limits.md) — how the windows, the forecast and the notifications work
+- [Auto continue](docs/auto-continue.md) — sessions that pick up again after a limit resets
 - [The history page](docs/history.md) — charts, export and sharing
 - [The dashboard](docs/dashboard.md) — keys, range and sort
 - [Scripting and API](docs/api.md)

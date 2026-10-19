@@ -106,6 +106,57 @@
         </ul>
       </section>
 
+      <!-- Filled by `settings.js` from the server, which keeps the switch: the plugin's
+           hook and the menu bar read it too, so it cannot live in this browser.
+           Hidden until the server answers, so a tracker too old to have it shows none. -->
+      <section class="panel settings-panel" id="auto-continue-panel" hidden>
+        <div class="panel-head">
+          <h2>Auto continue</h2>
+        </div>
+
+        <p class="settings-lede">
+          When a limit reaches 100% and your sessions stop, they pick up again by
+          themselves once it resets.
+        </p>
+
+        <div class="switches">
+          <div class="switch-row">
+            <label class="switch">
+              <input type="checkbox" role="switch" id="auto-continue" />
+              <span class="switch-track"><span class="switch-thumb"></span></span>
+              <span class="switch-text">
+                <span class="switch-title">Continue paused sessions</span>
+                <span class="switch-hint">
+                  About a minute after the reset, each session that stopped on the limit
+                  is told to continue — only if it is still open, you have not carried on
+                  in it yourself, and the limit is no longer full.
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <p class="settings-state" id="auto-continue-state" data-tone="warn" hidden></p>
+
+        <div class="auto-queue" id="auto-continue-queue" hidden>
+          <p class="auto-queue-head"><span id="auto-continue-count"></span></p>
+          <ul class="auto-queue-list" id="auto-continue-list"></ul>
+        </div>
+        <p class="auto-last" id="auto-continue-last" hidden></p>
+
+        <ul class="settings-notes">
+          <li><strong>Waits inside each session.</strong> The session-tracker plugin's
+            hook sits out the reset in the session that stopped, so no tab or menu bar
+            has to stay open — only the session.</li>
+          <li><strong>Once per stop.</strong> A session that hits the limit again waits
+            for the next reset rather than retrying in a loop.</li>
+          <li><strong>Any terminal.</strong> Claude Code wakes the session itself, so it
+            works in VS Code, Ghostty, tmux or anywhere else.</li>
+          <li><strong>Same switch as the menu bar.</strong> Kept by the tracker, not this
+            browser, so turning it off anywhere turns it off everywhere.</li>
+        </ul>
+      </section>
+
       <!-- Filled by `update.js`, which already asks the server about versions. -->
       <section class="panel settings-panel" id="version-panel">
         <div class="panel-head">

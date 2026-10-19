@@ -38,4 +38,18 @@ describe('the Claude Code plugin', () => {
       ok(cli.includes(`argv[0] === '${skill}'`), `the CLI has a ${skill} command`);
     }
   });
+
+  it('wakes a session that stopped on a limit through the CLI’s auto continue hook', () => {
+    const { hooks } = json('plugin/hooks/hooks.json') as {
+      hooks: { StopFailure: { matcher: string; hooks: { command: string; asyncRewake: boolean; timeout: number }[] }[] };
+    };
+    const [entry] = hooks.StopFailure;
+    const hook = entry?.hooks[0];
+    strictEqual(entry?.matcher, 'rate_limit');
+    strictEqual(hook?.asyncRewake, true, 'only asyncRewake wakes an idle session');
+    ok((hook?.timeout ?? 0) >= 7 * 24 * 60 * 60, 'long enough to wait out a week');
+    ok(hook?.command.includes('exec claude-code-session-tracker auto-continue wait'), 'runs the installed copy');
+    ok(hook?.command.includes(`npx -y claude-code-session-tracker@${String(pkg['version'])} auto-continue wait`), 'falls back to npx at this version, run `node scripts/plugin-version.mjs`');
+    ok(readFileSync(new URL('src/cli.ts', root), 'utf8').includes(`argv[0] === 'auto-continue'`), 'the CLI has the command');
+  });
 });

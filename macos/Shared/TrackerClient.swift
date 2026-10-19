@@ -112,6 +112,31 @@ struct UpdateInfo: Decodable, Hashable {
     var isBusy: Bool { install?.state == "installing" || install?.state == "restarting" }
 }
 
+/// Auto continue's switch and the sessions waiting on it. Trackers before 0.13 have no such endpoint.
+struct AutoContinueStatus: Decodable, Hashable {
+    struct Pending: Decodable, Hashable {
+        let sessionId: String
+        /// `five_hour` or `weekly`: which limit stopped the session.
+        let clock: String
+        let resetsAt: Double
+        let continueAt: Double
+
+        var continues: Date { Date(timeIntervalSince1970: continueAt / 1000) }
+        var resets: Date { Date(timeIntervalSince1970: resetsAt / 1000) }
+    }
+
+    let enabled: Bool
+    /// `ready`, `missing`, `outdated` or `disabled`: whether the plugin's hook is there to do the waiting.
+    let plugin: String
+    let pending: [Pending]
+
+    var isReady: Bool { plugin == "ready" }
+
+    func pending(for clock: String) -> [Pending] { pending.filter { $0.clock == clock } }
+
+    func pending(session id: String) -> Pending? { pending.first { $0.sessionId == id } }
+}
+
 struct Health: Decodable {
     let ok: Bool
     let version: String
@@ -139,6 +164,8 @@ struct TrackerSnapshot: Hashable {
     let sessionsUnreadable: Bool
     /// Set only when a newer version is out.
     let update: UpdateInfo?
+    /// Nil on a tracker too old to have auto continue.
+    let autoContinue: AutoContinueStatus?
     let fetchedAt: Date
 
     /// What to say in place of the limits, so a tracker this app cannot read is not mistaken for a quiet one.
@@ -193,6 +220,7 @@ enum TrackerClient {
         // Running sessions come back whatever the limit, so ask for as few others as possible.
         let list: Fetched<SessionList> = await get("/api/sessions?limit=1", port: port)
         let update: Fetched<UpdateInfo> = await get("/api/update", port: port)
+        let autoContinue: Fetched<AutoContinueStatus> = await get("/api/auto-continue", port: port)
         return TrackerSnapshot(
             port: port,
             version: health.version,
@@ -201,6 +229,7 @@ enum TrackerClient {
             running: list.value?.sessions.filter { $0.live != nil } ?? [],
             sessionsUnreadable: list.gap == .unreadable,
             update: update.value.flatMap { $0.available || $0.isBusy ? $0 : nil },
+            autoContinue: autoContinue.value,
             fetchedAt: Date()
         )
     }
@@ -216,6 +245,20 @@ enum TrackerClient {
         if (response as? HTTPURLResponse)?.statusCode == 202 { return nil }
         struct Failure: Decodable { let error: String }
         return (try? JSONDecoder().decode(Failure.self, from: data))?.error ?? "The tracker refused the update."
+    }
+
+    /// Turn auto continue on or off. Nil when the tracker took it, else why not.
+    static func setAutoContinue(_ enabled: Bool, port: Int) async -> String? {
+        guard let url = URL(string: "http://127.0.0.1:\(port)/api/auto-continue") else { return "Bad port" }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("http://127.0.0.1:\(port)", forHTTPHeaderField: "Origin")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("{\"enabled\":\(enabled)}".utf8)
+        guard let (data, response) = try? await session.data(for: request) else { return "The tracker did not answer." }
+        if (response as? HTTPURLResponse)?.statusCode == 200 { return nil }
+        struct Failure: Decodable { let error: String }
+        return (try? JSONDecoder().decode(Failure.self, from: data))?.error ?? "The tracker refused to change auto continue."
     }
 
     private enum Fetched<T> {

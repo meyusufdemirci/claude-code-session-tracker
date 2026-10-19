@@ -286,6 +286,15 @@ final class TrackerController: ObservableObject {
         if let url = snapshot?.dashboard { NSWorkspace.shared.open(url) }
     }
 
+    /// Flip auto continue on the tracker, which keeps the switch, then read it back.
+    func setAutoContinue(_ on: Bool) {
+        guard let snapshot else { return }
+        Task {
+            error = await TrackerClient.setAutoContinue(on, port: snapshot.port)
+            await refresh()
+        }
+    }
+
     func setLaunchesAtLogin(_ on: Bool) {
         do {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }

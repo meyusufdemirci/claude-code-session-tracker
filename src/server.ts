@@ -4,6 +4,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AutoContinue } from './auto-continue.ts';
 import type { TrackerConfig } from './config.ts';
 import { parseSort, SessionRegistry } from './core/registry.ts';
 import { revealInFileManager } from './desktop.ts';
@@ -31,16 +32,18 @@ export interface ServerOptions {
   registry?: SessionRegistry;
   updates?: UpdateCheck;
   installer?: SelfUpdate;
+  autoContinue?: AutoContinue;
   /** What the tracker was started with, so the Update button can start the new version the same way. */
   argv?: string[];
 }
 
-export function createServer({ config, registry, updates, installer, argv = [] }: ServerOptions): Server {
+export function createServer({ config, registry, updates, installer, autoContinue, argv = [] }: ServerOptions): Server {
   const sessions = registry ?? new SessionRegistry(config);
   const update = updates ?? new UpdateCheck({ offline: config.offline });
+  const autoContinuer = autoContinue ?? new AutoContinue({ claudeDir: config.claudeDir });
 
   const server = createHttpServer((req, res) => {
-    handle(req, res, config, sessions, update, self).catch((error: unknown) => {
+    handle(req, res, config, sessions, update, self, autoContinuer).catch((error: unknown) => {
       sendJson(res, 500, { error: error instanceof Error ? error.message : 'Internal error' });
     });
   });
@@ -69,6 +72,7 @@ async function handle(
   registry: SessionRegistry,
   updates: UpdateCheck,
   installer: SelfUpdate,
+  autoContinue: AutoContinue,
 ): Promise<void> {
   // A local server holding transcript contents is a DNS-rebinding target, so
   // when we are bound to loopback we only answer requests addressed to loopback.
@@ -83,6 +87,12 @@ async function handle(
   // Ahead of the read-only gate below, like reveal: the other route that acts.
   if (path === '/api/update/install') {
     await install(req, res, updates, installer);
+    return;
+  }
+
+  // Ahead of the read-only gate below: a POST here turns auto continue on or off.
+  if (path === '/api/auto-continue') {
+    await autoContinueRoute(req, res, autoContinue);
     return;
   }
 
@@ -303,6 +313,57 @@ async function install(
     return;
   }
   sendJson(res, 202, { ok: true, ...installer.status() });
+}
+
+/**
+ * Auto continue's switch, and the sessions waiting on it.
+ *
+ * A GET says where it stands. A POST of `{"enabled": true|false}` flips it, with the
+ * same origin check as the other routes that act: it decides whether this tool sends
+ * a message to sessions, so no other website may decide it.
+ */
+async function autoContinueRoute(req: IncomingMessage, res: ServerResponse, autoContinue: AutoContinue): Promise<void> {
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    sendJson(res, 200, autoContinue.status());
+    return;
+  }
+  if (req.method !== 'POST') {
+    res.setHeader('allow', 'GET, POST');
+    sendJson(res, 405, { error: `${req.method ?? 'Request'} not allowed` });
+    return;
+  }
+  if (!isSameOrigin(req.headers.origin)) {
+    sendJson(res, 403, { error: 'Cross-origin request refused' });
+    return;
+  }
+
+  const body = await readBody(req, 1024);
+  let enabled: unknown;
+  try {
+    enabled = (JSON.parse(body ?? '') as { enabled?: unknown }).enabled;
+  } catch {
+    enabled = undefined;
+  }
+  if (typeof enabled !== 'boolean') {
+    sendJson(res, 400, { error: 'Send {"enabled": true} or {"enabled": false}' });
+    return;
+  }
+  autoContinue.setEnabled(enabled);
+  sendJson(res, 200, autoContinue.status());
+}
+
+/** A small request body, or undefined when it runs past `max` bytes. */
+function readBody(req: IncomingMessage, max: number): Promise<string | undefined> {
+  return new Promise((resolveBody) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size <= max) chunks.push(chunk);
+    });
+    req.on('end', () => resolveBody(size <= max ? Buffer.concat(chunks).toString('utf8') : undefined));
+    req.on('error', () => resolveBody(undefined));
+  });
 }
 
 /** Browsers always send `Origin` on a POST, so a missing one is not our page asking. */

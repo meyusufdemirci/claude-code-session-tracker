@@ -1,12 +1,14 @@
 import { createServer as createRawServer, request, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { TestContext } from 'node:test';
+import { AutoContinue } from '../../src/auto-continue.ts';
 import { createConfig } from '../../src/config.ts';
 import { SessionRegistry } from '../../src/core/registry.ts';
 import { createServer } from '../../src/server.ts';
 import { SelfUpdate } from '../../src/self-update.ts';
 import { UpdateCheck } from '../../src/update.ts';
 import type { FakeSource } from './fake-source.ts';
+import { tempDir } from './temp.ts';
 
 export interface Response {
   status: number;
@@ -24,6 +26,7 @@ export interface TestServer {
 export interface RequestOptions {
   method?: string;
   headers?: Record<string, string>;
+  body?: string;
 }
 
 /**
@@ -46,9 +49,12 @@ export async function startServer(
     port: () => 0,
     close: async () => {},
   }),
+  // In a folder of its own unless a test brings its own, so no test flips the real switch.
+  autoContinue?: AutoContinue,
 ): Promise<TestServer> {
   const config = createConfig({ port: 0 });
-  const server = createServer({ config, registry: new SessionRegistry(config, sources), updates, installer });
+  const switcher = autoContinue ?? new AutoContinue({ claudeDir: '/nowhere', stateDir: await tempDir(t) });
+  const server = createServer({ config, registry: new SessionRegistry(config, sources), updates, installer, autoContinue: switcher });
   await new Promise<void>((resolve) => server.listen(0, config.host, resolve));
   t.after(() => new Promise((resolve) => server.close(() => resolve(null))));
 
@@ -91,6 +97,6 @@ function send(port: number, path: string, options: RequestOptions = {}): Promise
       },
     );
     req.on('error', reject);
-    req.end();
+    req.end(options.body);
   });
 }

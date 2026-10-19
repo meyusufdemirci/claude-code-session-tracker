@@ -31,6 +31,12 @@ transcript. It is what CI runs — Node 20/22/24 × npm/pnpm/yarn/bun on Linux,
 plus npm on macOS and Windows — so a change that only works from source fails
 before it ships.
 
+A source checkout run beside an installed tracker shares its auto continue switch
+and queue unless told otherwise:
+`CLAUDE_CODE_SESSION_TRACKER_STATE_DIR=/tmp/cst pnpm dev` keeps them apart. Testing
+the hook end to end needs a session that is refused for a limit; `auto-continue wait`
+reads a `StopFailure` hook payload on stdin, so it can be run by hand with one.
+
 Everything that parses a transcript lives in `src/sources/claude-code/`. The
 `Source` interface in `src/sources/source.ts` is the seam a second tool
 (Codex, Cursor) would plug into; `src/core/` knows nothing about Claude Code.

@@ -17,7 +17,9 @@ struct MenuContent: View {
             if let snapshot = controller.snapshot {
                 if let limits = snapshot.limits {
                     LimitRow(title: "Session limit", limit: limits.session)
+                    AutoContinueNote(status: snapshot.autoContinue, limit: limits.session, clock: "five_hour")
                     LimitRow(title: "Weekly limit", limit: limits.weekly)
+                    AutoContinueNote(status: snapshot.autoContinue, limit: limits.weekly, clock: "weekly")
                 } else {
                     Text(snapshot.limitsMessage)
                         .foregroundStyle(.secondary)
@@ -102,7 +104,15 @@ struct MenuContent: View {
                         Circle().fill(color(for: session.status)).frame(width: 6, height: 6)
                         Text(session.label).lineLimit(1).truncationMode(.tail)
                         Spacer(minLength: 4)
-                        Text(session.projectName).foregroundStyle(.secondary).lineLimit(1)
+                        if let auto = snapshot.autoContinue, auto.enabled, auto.isReady, let waiting = auto.pending(session: session.id) {
+                            Label(Formatting.reset(waiting.continues), systemImage: "arrow.clockwise")
+                                .labelStyle(.titleAndIcon)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .help("Continues automatically after the limit resets")
+                        } else {
+                            Text(session.projectName).foregroundStyle(.secondary).lineLimit(1)
+                        }
                     }
                     .font(.callout)
                 }
@@ -145,6 +155,12 @@ struct MenuContent: View {
             Toggle("Open at login", isOn: Binding(get: { controller.launchesAtLogin }, set: controller.setLaunchesAtLogin))
                 .toggleStyle(.checkbox)
                 .font(.caption)
+            if let auto = controller.snapshot?.autoContinue {
+                Toggle("Auto continue paused sessions", isOn: Binding(get: { auto.enabled }, set: controller.setAutoContinue))
+                    .toggleStyle(.checkbox)
+                    .font(.caption)
+                    .help("When a limit stops your sessions, continue them once it resets. Needs the session-tracker Claude Code plugin.")
+            }
         }
     }
 
@@ -239,6 +255,62 @@ private struct UpdateNotice: View {
                 ? "You have \(update.current). Update installs it, restarts the tracker and updates this app."
                 : "You have \(update.current). \(update.installBlocked ?? "") Update with:"
         }
+    }
+}
+
+/**
+ * Under a limit: when it is full or has stopped sessions, what auto continue will do
+ * about it — or an offer to turn it on, or why it cannot.
+ */
+private struct AutoContinueNote: View {
+    @EnvironmentObject private var controller: TrackerController
+    let status: AutoContinueStatus?
+    let limit: UsageLimit
+    let clock: String
+
+    var body: some View {
+        if let status, shown(status) {
+            let pending = status.pending(for: clock)
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: status.enabled && status.isReady ? "arrow.clockwise" : "info.circle")
+                    .foregroundStyle(status.enabled && status.isReady ? Color.green : Color.blue)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(text(status, pending))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if status.isReady && !status.enabled {
+                        Button("Turn on") { controller.setAutoContinue(true) }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                    }
+                }
+            }
+            .font(.caption)
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                (status.enabled && status.isReady ? Color.green : Color.blue).opacity(0.12),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+        }
+    }
+
+    private func shown(_ status: AutoContinueStatus) -> Bool {
+        (limit.share ?? 0) >= 1 || !status.pending(for: clock).isEmpty
+    }
+
+    private func text(_ status: AutoContinueStatus, _ pending: [AutoContinueStatus.Pending]) -> String {
+        let count = pending.count == 1 ? "1 session" : "\(pending.count) sessions"
+        guard status.isReady else {
+            return status.plugin == "missing"
+                ? "Auto continue needs the session-tracker Claude Code plugin to pick sessions up after the reset."
+                : "Auto continue needs the session-tracker plugin updated and turned on in Claude Code."
+        }
+        if status.enabled {
+            guard let first = pending.map(\.continues).min() else { return "Auto continue is on for this limit." }
+            return "\(count) continue at \(Formatting.reset(first))"
+        }
+        guard let reset = pending.map(\.resets).min() else { return "Turn on auto continue to pick sessions up when this limit resets." }
+        return "\(count) stopped at the limit. Turn on auto continue to resume them at \(Formatting.reset(reset))."
     }
 }
 

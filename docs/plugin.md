@@ -24,9 +24,13 @@
   Dashboard     http://127.0.0.1:3099
 ```
 
+- It also carries the hook [auto continue](auto-continue.md) waits with: on a turn
+  refused for a usage limit, it runs `claude-code-session-tracker auto-continue wait`
+  in the background (or the `npx` fallback below) and wakes the session after the
+  reset if auto continue is on. Off, it waits and does nothing.
 - Claude runs `/session-tracker:status` by itself when you ask something it answers, such
   as how much of the weekly limit is left. `/session-tracker:open` only runs when you type it.
-- The plugin holds no code of its own. Each command runs this CLI: the copy on your
+- The plugin holds no code of its own. Each command, and the hook, runs this CLI: the copy on your
   `PATH` when there is one, otherwise `npx claude-code-session-tracker` at the plugin's own version,
   which downloads the package the first time. Both need a version that has the
   `status` command, 0.11.0 or later.

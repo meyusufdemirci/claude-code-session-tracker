@@ -1,0 +1,18 @@
+{
+  "description": "Auto continue: when a session stops on a usage limit, wait in the background for the reset and wake the session if auto continue is on.",
+  "hooks": {
+    "StopFailure": [
+      {
+        "matcher": "rate_limit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v claude-code-session-tracker >/dev/null 2>&1 && exec claude-code-session-tracker auto-continue wait || exec npx -y claude-code-session-tracker@0.12.0 auto-continue wait",
+            "asyncRewake": true,
+            "timeout": 691200
+          }
+        ]
+      }
+    ]
+  }
+}

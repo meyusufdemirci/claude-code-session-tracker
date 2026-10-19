@@ -2,6 +2,7 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { autoContinueCommand } from './auto-continue-cli.ts';
 import { autostart } from './autostart.ts';
 import { createConfig, DEFAULT_HOST, DEFAULT_PORT } from './config.ts';
 import { SessionRegistry } from './core/registry.ts';
@@ -26,6 +27,7 @@ const HELP = `
     $ claude-code-session-tracker status|open
     $ claude-code-session-tracker autostart on|off|status
     $ claude-code-session-tracker menubar install|uninstall|status
+    $ claude-code-session-tracker auto-continue on|off|status
 
   Commands
     status                Print the limits, the running sessions and today's tokens
@@ -37,6 +39,10 @@ const HELP = `
                           --with-tracker installs the tracker too, with Homebrew or npm
     menubar uninstall     Remove them
     menubar status        Say whether they are installed
+    auto-continue on      Continue sessions that stopped on a limit once it resets
+                          (needs the session-tracker Claude Code plugin)
+    auto-continue off     Leave them stopped
+    auto-continue status  Say whether it is on, and which sessions are waiting
 
   Options
     -p, --port <number>   Port to listen on, stepping forward if taken (default ${DEFAULT_PORT})
@@ -55,8 +61,9 @@ const HELP = `
   both off. \`menubar install\` is the one command that downloads anything: the
   app this version was published with, from this project's GitHub releases.
   With --with-tracker it also runs \`brew install\` or \`npm install -g\` for the tracker.
-  Never writes to the Claude directory. Binds to loopback unless --host says
-  otherwise, and refuses requests not addressed to a loopback host.
+  Never writes to the Claude directory; auto continue keeps its switch in the
+  tracker's own folder. Binds to loopback unless --host says otherwise, and
+  refuses requests not addressed to a loopback host.
 `;
 
 export async function main(argv = process.argv.slice(2)): Promise<number> {
@@ -64,6 +71,7 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (argv[0] === 'menubar') return menubar(argv.slice(1));
   if (argv[0] === 'status') return status(argv.slice(1));
   if (argv[0] === 'open') return open(argv.slice(1));
+  if (argv[0] === 'auto-continue') return autoContinueCommand(argv.slice(1));
 
   let values;
   try {

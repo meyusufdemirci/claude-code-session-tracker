@@ -1586,3 +1586,49 @@ kbd {
 
 .share-download { align-self: flex-start; font-size: .8rem; color: var(--ink-faint); }
 .share-download:hover { color: var(--accent); }
+
+/* ------------------------------------------------------------ auto continue */
+
+/* Under a full limit's details. Blue while it is offering something, green once
+   it is on: the one says "you could", the other "it will". */
+.auto-note {
+  margin: .9rem 0 0;
+  padding: .7rem .85rem;
+  border: 1px solid color-mix(in srgb, var(--tick-pace) 30%, var(--rule));
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--tick-pace) 7%, var(--surface));
+  font-size: .82rem;
+  max-width: 62ch;
+}
+.auto-note[data-tone="on"] {
+  border-color: color-mix(in srgb, var(--ok) 35%, var(--rule));
+  background: color-mix(in srgb, var(--ok) 9%, var(--surface));
+}
+.auto-note-text { margin: 0; color: var(--ink); }
+.auto-note-actions { margin: .6rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
+.auto-note-actions a { color: var(--accent); font-size: .8rem; }
+.auto-note[data-tone="on"] .auto-note-actions { margin-top: .35rem; }
+.auto-note .sheet-cta:disabled { opacity: .6; cursor: progress; }
+
+/* The sessions waiting, on the settings page. */
+.auto-queue { margin: 1rem 0 0; border: 1px solid var(--rule); border-radius: 3px; }
+.auto-queue-head {
+  margin: 0;
+  padding: .5rem .75rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: .8rem;
+  color: var(--ink-soft);
+}
+.auto-queue-list { margin: 0; padding: 0; list-style: none; }
+.auto-queue-list li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .25rem 1rem;
+  padding: .5rem .75rem;
+  font-size: .85rem;
+}
+.auto-queue-list li + li { border-top: 1px solid var(--rule); }
+.auto-queue-name { min-width: 0; overflow-wrap: anywhere; }
+.auto-queue-when { color: color-mix(in srgb, var(--warn) 65%, var(--ink)); font-size: .78rem; }
+.auto-last { margin: .7rem 0 0; font-size: .8rem; color: var(--ink-faint); }

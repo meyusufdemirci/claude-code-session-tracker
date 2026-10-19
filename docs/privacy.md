@@ -15,6 +15,11 @@ releases, once, and checks it against the checksum the package was published wit
 the browser and saved to your disk, and **Share** only opens X's or LinkedIn's own
 compose page when you click it — the image goes by your clipboard, never by us.
 
+[Auto continue](auto-continue.md), when you turn it on, is the one thing that acts
+on a session: the plugin's hook wakes a session that stopped on a limit once it
+resets. Its switch and the list of waiting sessions are kept in the tracker's own
+folder, never the Claude directory.
+
 Transcripts hold your prompts, your paths, and sometimes your secrets. That is why
 the default bind is `127.0.0.1` and why every request has to be addressed to a
 loopback host — a page on any website can otherwise point a browser at your
