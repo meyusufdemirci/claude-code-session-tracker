@@ -10,6 +10,7 @@ import type {
 } from '../../core/types.ts';
 import type { RecentQuery, RecentSessions, SessionSource, UsageQuery } from '../source.ts';
 import { readDetail } from './detail.ts';
+import { readEffort } from './effort.ts';
 import { readUsageHistory } from './history.ts';
 import type { FileUsage } from './buckets.ts';
 import { readUsageLimits } from './limits.ts';
@@ -93,7 +94,22 @@ export class ClaudeCodeSource implements SessionSource {
   }
 
   async listRecent(options: RecentQuery): Promise<RecentSessions> {
-    return listRecentSessions(this.#config, options, this.#transcripts);
+    const recent = await listRecentSessions(this.#config, options, this.#transcripts);
+    if (!options.include?.length) return recent;
+
+    // Effort is read from the settings as they stand now, so only a running session
+    // is given one — an ended session may well have run under different settings.
+    // Copies, not edits: the listed sessions are the transcript cache's own objects.
+    const running = new Set(options.include);
+    const sessions = await Promise.all(
+      recent.sessions.map(async (session) => {
+        // The level depends on the model, so a session that has not answered yet gets none.
+        if (!running.has(session.id) || !session.model) return session;
+        const effort = await readEffort(this.#config.claudeDir, session.project.path, session.model);
+        return effort ? { ...session, effort } : session;
+      }),
+    );
+    return { ...recent, sessions };
   }
 
   async detail(id: string): Promise<SessionDetail | null> {

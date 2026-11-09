@@ -421,7 +421,11 @@ const liveTable = createTable({
     set('.badge-text', STATUS_LABELS[session.status] ?? session.status);
     row.querySelector('.badge')?.setAttribute('data-status', session.status);
     set('.waiting-for', continueLine(session) ?? session.waitingFor ?? '');
-    set('.model', shortModel(session.model));
+    set(
+      '.model',
+      [shortModel(session.model), session.effort].filter(Boolean).join(' · ') || undefined,
+      session.effort ? `Effort ${session.effort}, as configured in Claude Code settings` : '',
+    );
     fillTokens(set, session, row);
     set('.uptime', formatUptime(session.startedAt));
   },

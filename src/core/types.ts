@@ -48,6 +48,11 @@ export interface Session {
   model?: string;
   /** That model's context window, when the model is recognized. Absent means unknown, never guessed. */
   contextWindow?: number;
+  /**
+   * The effort level configured for that model, e.g. `high`. Running sessions only:
+   * it comes from the settings files as they stand now, never from the transcript.
+   */
+  effort?: string;
   transcriptPath?: string;
   sizeBytes?: number;
   tokens?: SessionTokenTotals;
