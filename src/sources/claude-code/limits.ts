@@ -58,11 +58,10 @@ const WEEKLY_RECENT_MS = DAY_MS;
  * asks the server again, and a card claiming to quote Claude Code should not be
  * showing a figure Claude Code has already thrown away.
  *
- * The five-hour clock is where this bites. The readout is only refreshed when
- * something actually asks the server, so an afternoon of heavy work can run against
- * a percentage taken before any of it happened — a bar that sits still while the
- * window it describes fills. Past the cutoff the yardstick takes over: a rougher
- * denominator, but one that moves with the transcripts.
+ * It applies only to a reading with no reset: one with a reset is kept to the end of
+ * its window whatever its age, because within a window usage only rises — an old
+ * percentage is a floor, and far closer than the yardstick, which is not a share of
+ * the quota at all. The page shows its age beside it.
  */
 const MAX_READING_AGE = 0.2;
 
@@ -128,11 +127,11 @@ function newer(a: ReportedUsage | undefined, b: ReportedUsage | undefined): Repo
  * and the card falls back to the yardstick rather than showing a bar that will not
  * move until the next prompt.
  *
- * It goes stale inside its window for the same reason, just less visibly — the
- * window is still the right one, the number in it is simply hours behind the work —
- * so a reading is also dropped once it has aged past `MAX_READING_AGE` of the window
- * it describes. A stamp we could not read counts as too old: there is no way to show
- * an unstamped reading is still current, and one dated ahead of now is no better.
+ * Inside its window it is kept however old, and `fetchedAt` goes with it so the page
+ * can say how old: within a window usage only rises, so the reading is a floor, and a
+ * stale floor beats swapping in the yardstick — a different measure that can read
+ * 108% while the real bar says 62%. A stamp we could not read, or one dated ahead of
+ * now, still drops it.
  */
 function attachReported(
   reported: ReportedLimit | undefined,
@@ -144,7 +143,11 @@ function attachReported(
 
   const fetchedAt = usage.fetchedAt;
   const age = now - fetchedAt;
-  if (age < 0 || age > windowMs * MAX_READING_AGE) return undefined;
+  if (fetchedAt <= 0 || age < 0) return undefined;
+  // Inside its own window an old reading is still a floor — usage only rises until the
+  // reset — and far closer than the yardstick, so it is kept with its age for the page
+  // to show. Only a reading with no reset to tie it to a window ages out.
+  if (reported.resetsAt === undefined && age > windowMs * MAX_READING_AGE) return undefined;
 
   return {
     reported: {

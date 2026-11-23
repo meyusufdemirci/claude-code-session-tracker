@@ -38,6 +38,8 @@ struct UsageWindow: Decodable, Hashable {
 struct ReportedReading: Decodable, Hashable {
     let percent: Double?
     let resetsAt: Double?
+    /// When the server gave this reading; it can be hours old, so the menu says so.
+    let fetchedAt: Double?
     /// The one model this bar bills, when the plan has no all-models week.
     let scope: String?
 }
@@ -288,6 +290,14 @@ enum Formatting {
     static func percent(_ share: Double?) -> String {
         guard let share else { return "–" }
         return "\(Int((share * 100).rounded()))%"
+    }
+
+    /// " · 2h ago" once a reading is old enough for its age to matter, else nothing.
+    static func age(_ ms: Double?, now: Date = Date()) -> String {
+        guard let ms else { return "" }
+        let minutes = Int(now.timeIntervalSince1970 - ms / 1000) / 60
+        if minutes < 10 { return "" }
+        return minutes < 60 ? " · \(minutes)m ago" : " · \(minutes / 60)h ago"
     }
 
     /// "18:00" today, "Sat 12:00" further out.

@@ -1,7 +1,9 @@
 import { deepStrictEqual, strictEqual } from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createConfig } from '../../../src/config.ts';
-import { ServerUsage } from '../../../src/sources/claude-code/server-usage.ts';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { keychainService, ServerUsage } from '../../../src/sources/claude-code/server-usage.ts';
 
 const NOW = Date.parse('2026-10-01T10:00:00.000Z');
 const config = createConfig({ claudeDir: '/nowhere' });
@@ -102,5 +104,13 @@ describe('ServerUsage', () => {
     strictEqual(await expired.read(), undefined);
     strictEqual(await missing.read(), undefined);
     strictEqual(calls.length, 0);
+  });
+});
+
+describe('keychainService', () => {
+  it('names the Keychain item the way Claude Code does', () => {
+    strictEqual(keychainService(join(homedir(), '.claude')), 'Claude Code-credentials');
+    // sha256('/Users/a/.claude-work') starts c7ed87c8… — a moved install keeps its own item.
+    strictEqual(keychainService('/Users/a/.claude-work'), `Claude Code-credentials-c7ed87c8`);
   });
 });

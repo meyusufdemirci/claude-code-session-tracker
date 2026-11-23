@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import type { TrackerConfig } from '../../config.ts';
 import { obj, parseUtilization, type ReportedUsage } from './quota.ts';
@@ -113,17 +114,21 @@ export class ServerUsage {
  * The token Claude Code is signed in with.
  *
  * On macOS it lives in the login Keychain; everywhere else, and on macOS installs
- * that predate the Keychain, in `<claudeDir>/.credentials.json`. The Keychain item
- * belongs to the default install only — a `CLAUDE_CONFIG_DIR` install keeps its own
- * under a different name — so a moved data directory is only read from its own file.
+ * that predate the Keychain, in `<claudeDir>/.credentials.json`. A `CLAUDE_CONFIG_DIR`
+ * install keeps its own Keychain item, named after a hash of that directory.
  */
 export async function readAccessToken(config: TrackerConfig): Promise<AccessToken | undefined> {
-  const isDefault = config.claudeDir === join(homedir(), '.claude');
   const candidates: AccessToken[] = [];
 
-  if (process.platform === 'darwin' && isDefault) {
-    const fromKeychain = parseCredentials(await readKeychain());
-    if (fromKeychain) candidates.push(fromKeychain);
+  if (process.platform === 'darwin') {
+    // Several items can share the service name — other macOS users, older installs —
+    // and without an account `security` returns whichever comes first. Claude Code
+    // files its own under the login name, so that one is asked for by name.
+    const service = keychainService(config.claudeDir);
+    for (const account of [keychainAccount(), undefined]) {
+      const fromKeychain = parseCredentials(await readKeychain(service, account));
+      if (fromKeychain) candidates.push(fromKeychain);
+    }
   }
 
   try {
@@ -138,11 +143,33 @@ export async function readAccessToken(config: TrackerConfig): Promise<AccessToke
   return candidates.sort((a, b) => (b.expiresAt ?? 0) - (a.expiresAt ?? 0))[0];
 }
 
-function readKeychain(): Promise<string | undefined> {
+/**
+ * The Keychain service Claude Code keeps the sign-in of `claudeDir` under: the bare
+ * name for the default install, else suffixed with the first 8 hex digits of the
+ * directory's sha256, as Claude Code 2.1 names it.
+ */
+export function keychainService(claudeDir: string): string {
+  if (claudeDir === join(homedir(), '.claude')) return KEYCHAIN_SERVICE;
+  const hash = createHash('sha256').update(claudeDir.normalize('NFC')).digest('hex').slice(0, 8);
+  return `${KEYCHAIN_SERVICE}-${hash}`;
+}
+
+/** The account Claude Code files its Keychain item under: the login name, as it reads it. */
+export function keychainAccount(): string {
+  let name: string;
+  try {
+    name = process.env['USER'] || userInfo().username;
+  } catch {
+    name = 'claude-code-user';
+  }
+  return /^[a-zA-Z0-9._-]+$/.test(name) ? name : 'claude-code-user';
+}
+
+function readKeychain(service: string, account?: string): Promise<string | undefined> {
   return new Promise((resolve) => {
     execFile(
       'security',
-      ['find-generic-password', '-s', KEYCHAIN_SERVICE, '-w'],
+      ['find-generic-password', '-s', service, ...(account ? ['-a', account] : []), '-w'],
       { timeout: TIMEOUT_MS },
       (error, stdout) => resolve(error ? undefined : stdout),
     );

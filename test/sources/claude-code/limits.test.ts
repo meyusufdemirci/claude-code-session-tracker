@@ -678,30 +678,11 @@ describe('readUsageLimits, Claude Code\u2019s own reading', () => {
     strictEqual(limits.session.current?.startedAt, at('11:30'));
   });
 
-  it('drops a five-hour reading the work has left behind, and keeps its reset', async (t) => {
-    // Claude Code refreshes the readout when it asks the server, not while you work,
-    // so two hours of it can land against a percentage taken before any of it
-    // happened. The reset it came with does not go stale the same way — windows are
-    // five hours apart however old the reading is — so only the number goes.
-    const home = await claudeHome(t);
-    await home.accountFile({
-      weeklyResetsAt: NOW + 3 * DAY_MS,
-      fiveHour: { percent: 3, resetsAt: at('17:00') },
-      fetchedAt: at('10:00'),
-    });
-    await home.transcript(CWD, sessionId(1), [turn(1, '12:00', 10)]);
-
-    const limits = await readUsageLimits(home.config, cache(), NOW);
-
-    strictEqual(limits.session.reported, undefined);
-    strictEqual(limits.session.clock, 'reported');
-    strictEqual(limits.session.current?.startedAt, at('12:00'));
-    strictEqual(limits.session.current?.resetsAt, at('17:00'));
-  });
-
-  it('keeps the same reading for the week, which two hours barely moves', async (t) => {
-    // One file, one stamp, two answers: the cutoff is a share of the window a
-    // reading describes, and two hours is a fifth of five but nothing of seven days.
+  it('keeps an old reading to the end of its window, with its age', async (t) => {
+    // Claude Code refreshes the readout only when it asks the server, so it can be
+    // hours old. Within its window usage only rises, so the old figure is a floor and
+    // is kept with its stamp, rather than swapped for the yardstick, which measures
+    // something else and can read 108% while the real bar is at 62%.
     const home = await claudeHome(t);
     await home.accountFile({
       weeklyResetsAt: NOW + 3 * DAY_MS,
@@ -713,8 +694,12 @@ describe('readUsageLimits, Claude Code\u2019s own reading', () => {
 
     const limits = await readUsageLimits(home.config, cache(), NOW);
 
+    strictEqual(limits.session.reported?.percent, 3);
+    strictEqual(limits.session.reported?.fetchedAt, at('10:00'));
     strictEqual(limits.weekly.reported?.percent, 35);
-    strictEqual(limits.session.reported, undefined);
+    strictEqual(limits.session.clock, 'reported');
+    strictEqual(limits.session.current?.startedAt, at('12:00'));
+    strictEqual(limits.session.current?.resetsAt, at('17:00'));
   });
 
   it('drops a reading the account file left undated', async (t) => {
